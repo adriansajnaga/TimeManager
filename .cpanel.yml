@@ -1,4 +1,6 @@
 ---
 deployment:
   tasks:
-    - /bin/bash deploy/cpanel-deploy.sh
+    - export APP=/home/iascomm/TimeManager
+    - export WEB=/home/iascomm/public_html/tm
+    - /bin/bash $APP/deploy/deploy.sh > $APP/storage/logs/deploy.log 2>&1

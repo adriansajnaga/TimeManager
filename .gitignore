@@ -36,3 +36,5 @@ yarn-error.log
 /boost.json
 /opencode.json
 /opencode.jsonc
+/composer.phar
+error_log
