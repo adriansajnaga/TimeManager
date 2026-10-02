@@ -1,0 +1,4 @@
+---
+deployment:
+  tasks:
+    - /bin/bash deploy/cpanel-deploy.sh
