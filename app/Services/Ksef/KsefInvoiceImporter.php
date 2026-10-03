@@ -32,20 +32,42 @@ class KsefInvoiceImporter
     ) {}
 
     /**
-     * @return array{sales: int, purchases: int, known: int, confirmed: int, failed: array<string, string>}
+     * Pobiera najwyżej przez $seconds sekund (hosting przerywa długie żądania) albo do limitu KSeF;
+     * reszta czeka na kolejne uruchomienie — pobrane już faktury są pomijane.
+     *
+     * @return array{sales: int, purchases: int, known: int, confirmed: int, failed: array<string, string>, remaining: int, stopped: string|null}
      */
-    public function import(CarbonInterface $from, CarbonInterface $to): array
+    public function import(CarbonInterface $from, CarbonInterface $to, int $seconds = 20): array
     {
-        $summary = ['sales' => 0, 'purchases' => 0, 'known' => 0, 'confirmed' => 0, 'failed' => []];
+        $summary = ['sales' => 0, 'purchases' => 0, 'known' => 0, 'confirmed' => 0, 'failed' => [], 'remaining' => 0, 'stopped' => null];
+        $deadline = microtime(true) + $seconds;
 
         foreach (['Subject1' => InvoiceDirection::Sales, 'Subject2' => InvoiceDirection::Purchase] as $subject => $direction) {
             foreach ($this->windows($from, $to) as [$windowFrom, $windowTo]) {
                 $offset = 0;
 
                 do {
-                    $page = $this->client->queryInvoiceMetadata($windowFrom, $windowTo, $subject, $offset);
+                    try {
+                        $page = $summary['stopped'] === null
+                            ? $this->client->queryInvoiceMetadata($windowFrom, $windowTo, $subject, $offset)
+                            : ['invoices' => [], 'hasMore' => false];
+                    } catch (KsefRateLimitException $exception) {
+                        $summary['stopped'] = $exception->getMessage();
+
+                        break;
+                    }
 
                     foreach ($page['invoices'] as $metadata) {
+                        if ($summary['stopped'] === null && microtime(true) > $deadline) {
+                            $summary['stopped'] = (string) __('The time for one download is up.');
+                        }
+
+                        if ($summary['stopped'] !== null) {
+                            $summary['remaining'] += $this->isKnown($metadata) ? 0 : 1;
+
+                            continue;
+                        }
+
                         $this->importOne($metadata, $direction, $summary);
                     }
 
@@ -59,7 +81,16 @@ class KsefInvoiceImporter
 
     /**
      * @param  array<string, mixed>  $metadata
-     * @param  array{sales: int, purchases: int, known: int, confirmed: int, failed: array<string, string>}  $summary
+     */
+    private function isKnown(array $metadata): bool
+    {
+        return isset($metadata['ksefNumber'])
+            && Invoice::query()->withoutGlobalScopes()->where('ksef_number', (string) $metadata['ksefNumber'])->exists();
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @param  array{sales: int, purchases: int, known: int, confirmed: int, failed: array<string, string>, remaining: int, stopped: string|null}  $summary
      */
     private function importOne(array $metadata, InvoiceDirection $direction, array &$summary): void
     {
@@ -93,6 +124,10 @@ class KsefInvoiceImporter
 
             $this->store($xml, $ksefNumber, $direction);
             $summary[$direction === InvoiceDirection::Sales ? 'sales' : 'purchases']++;
+        } catch (KsefRateLimitException $exception) {
+            // Limit KSeF — tej i kolejnych nie pobieramy teraz; wejdą przy następnym uruchomieniu.
+            $summary['stopped'] = $exception->getMessage();
+            $summary['remaining']++;
         } catch (Throwable $exception) {
             report($exception);
             $summary['failed'][$ksefNumber] = self::reason($exception);

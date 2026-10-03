@@ -82,20 +82,25 @@ new #[Title('Invoices')] class extends Component {
             return;
         }
 
-        $settings = KsefSetting::current();
-        $settings->synced_until = CarbonImmutable::parse($this->ksefTo);
-        $settings->save();
+        // Zakres zapamiętujemy dopiero po pobraniu wszystkiego — przerwane pobieranie wznowi ten sam okres.
+        if ($summary['stopped'] === null) {
+            $settings = KsefSetting::current();
+            $settings->synced_until = CarbonImmutable::parse($this->ksefTo);
+            $settings->save();
+        }
 
         Flux::modal('ksef-import')->close();
         Flux::toast(
-            variant: $summary['failed'] === [] ? 'success' : 'warning',
+            variant: $summary['failed'] === [] && $summary['stopped'] === null ? 'success' : 'warning',
+            duration: $summary['stopped'] === null ? 5000 : 15000,
             text: __('KSeF: :sales new sales, :purchases new purchases, :confirmed confirmed, :known already here.', [
                 'sales' => $summary['sales'],
                 'purchases' => $summary['purchases'],
                 'confirmed' => $summary['confirmed'],
                 'known' => $summary['known'],
             ])
-                .($summary['failed'] !== [] ? ' '.__('Could not read: :count — details below the list.', ['count' => count($summary['failed'])]) : ''),
+                .($summary['failed'] !== [] ? ' '.__('Could not read: :count — details below the list.', ['count' => count($summary['failed'])]) : '')
+                .($summary['stopped'] !== null ? ' '.$summary['stopped'].' '.__('Still to download: :count — click “Download from KSeF” again.', ['count' => $summary['remaining']]) : ''),
         );
 
         $this->importFailures = $summary['failed'];
@@ -210,7 +215,6 @@ new #[Title('Invoices')] class extends Component {
         <form wire:submit="importFromKsef" class="space-y-6">
             <div>
                 <flux:heading size="lg">{{ __('Download from KSeF') }}</flux:heading>
-                <flux:text class="mt-2">{{ __('Sales (also from PM and the taxpayer application) and purchase invoices issued in this period. Invoices already in the application are skipped.') }}</flux:text>
             </div>
 
             <div class="grid grid-cols-2 gap-4">

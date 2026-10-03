@@ -30,10 +30,10 @@ class KsefClient
     private const STATUS_DELAY_MS = 700;
 
     /** Ile razy ponawiamy zapytanie odrzucone limitem KSeF (429). */
-    private const RATE_LIMIT_RETRIES = 4;
+    private const RATE_LIMIT_RETRIES = 1;
 
-    /** Najdłuższe czekanie na limit KSeF w sekundach (dłuższe = błąd, spróbuj później). */
-    private const RATE_LIMIT_MAX_WAIT = 30;
+    /** Najdłuższe czekanie na limit KSeF w sekundach (dłuższe = przerwij i spróbuj później). */
+    private const RATE_LIMIT_MAX_WAIT = 5;
 
     /** Wyłączane w testach — ponowienia bez czekania. */
     public bool $rateLimitSleep = true;
@@ -306,7 +306,8 @@ class KsefClient
      * @param  Closure(): Response  $send
      */
     /**
-     * KSeF ogranicza liczbę zapytań (HTTP 429 z nagłówkiem Retry-After) — czekamy i ponawiamy.
+     * KSeF ogranicza liczbę zapytań (HTTP 429 z Retry-After). Krótką przerwę odczekujemy raz;
+     * dłuższa kończy się wyjątkiem — żądanie strony nie może wisieć (limit czasu hostingu).
      */
     private function call(Closure $send): Response
     {
@@ -317,12 +318,17 @@ class KsefClient
                 throw new KsefException(__('Cannot connect to KSeF: :message', ['message' => $exception->getMessage()]));
             }
 
-            if ($response->status() !== 429 || $attempt > self::RATE_LIMIT_RETRIES) {
+            if ($response->status() !== 429) {
                 return $response;
             }
 
-            $wait = (int) ($response->header('Retry-After') ?: 0);
-            $this->pause(min(max($wait, $attempt * 2), self::RATE_LIMIT_MAX_WAIT));
+            $wait = max(1, (int) ($response->header('Retry-After') ?: 1));
+
+            if ($attempt > self::RATE_LIMIT_RETRIES || $wait > self::RATE_LIMIT_MAX_WAIT) {
+                throw new KsefRateLimitException($wait);
+            }
+
+            $this->pause($wait);
         }
     }
 

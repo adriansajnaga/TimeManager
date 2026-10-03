@@ -524,3 +524,31 @@ test('an invoice from KSeF shows the totals of its XML even when the lines are g
 
     $this->actingAs($this->admin)->get(route('invoices.show', $invoice))->assertSee('1 537,50 PLN');
 });
+
+test('a long KSeF request limit stops the download and keeps the rest for later', function () {
+    app()->afterResolving(KsefClient::class, fn ($client) => $client->rateLimitSleep = false);
+    $xml = file_get_contents(base_path('tests/Fixtures/ksef/purchase-domestic.xml'));
+
+    Http::fake([
+        '*/invoices/ksef/P-1' => Http::response($xml, 200, ['Content-Type' => 'application/xml']),
+        '*/invoices/ksef/P-2' => Http::response(['exception' => ['exceptionDescription' => 'Too many requests']], 429, ['Retry-After' => '60']),
+    ]);
+    fakeKsef(['Subject2' => [['ksefNumber' => 'P-1'], ['ksefNumber' => 'P-2'], ['ksefNumber' => 'P-3']]]);
+
+    $summary = app(KsefInvoiceImporter::class)->import(now()->subMonth(), now());
+
+    expect($summary['purchases'])->toBe(1)
+        ->and($summary['stopped'])->toContain('60 s')
+        ->and($summary['remaining'])->toBe(2)
+        ->and($summary['failed'])->toBe([]);
+});
+
+test('the download stops when its time is up', function () {
+    fakeKsef(['Subject2' => [['ksefNumber' => 'P-1'], ['ksefNumber' => 'P-2']]]);
+
+    $summary = app(KsefInvoiceImporter::class)->import(now()->subMonth(), now(), seconds: -1);
+
+    expect($summary['remaining'])->toBe(2)
+        ->and($summary['purchases'])->toBe(0)
+        ->and($summary['stopped'])->not->toBeNull();
+});
