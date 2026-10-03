@@ -38,6 +38,7 @@ plus moduł faktur (sprzedaż, zakupy z KSeF, korekty, zaliczki, proformy). Wła
   - wiersz: `P_8A` „Szt.”, `P_12`, `KursWaluty` w `FaWiersz` (4.3014);
   - nabywca krajowy (3/9/2026 z PM): `NIP`, `P_13_1`/`P_14_1`, `P_1M`, `DaneKontaktowe/Telefon` sprzedawcy; seria numerów wspólna z PM potwierdzona (5/8, 3/9).
 - **Serwer:** nazwa aplikacji (TM Time Manager / ASCOMM Hours & Invoices).
+- **KSeF produkcja:** przejście po teście na środowisku testowym (Administracja → KSeF).
 
 ## Ustalenia z analizy starej aplikacji
 
@@ -62,7 +63,7 @@ plus moduł faktur (sprzedaż, zakupy z KSeF, korekty, zaliczki, proformy). Wła
 | 7 | Kilometrówka, materiały, rozliczenia godzin → szkic faktury, pakiet PDF, test akceptacyjny 4/8/2026 | ✅ |
 | 8 | E-mail (SMTP z ustawień, szablony, logi) | ✅ |
 | 9 | Projekty ryczałtowe i transze, dashboard | ✅ |
-| 10 | Instrukcja wdrożenia | ⏳ |
+| 10 | Instrukcja wdrożenia (`deploy/CPANEL.md`) | ✅ |
 
 ## Faza 2 — jak sprawdzić
 
