@@ -9,7 +9,10 @@ use App\Models\WeeklyReport;
 use App\Models\WorkWeek;
 use App\Services\Ai\AiException;
 use App\Services\Ai\TextAssistant;
+use App\Services\Mileage\MileageCalculator;
+use App\Services\Mileage\MileageTrip;
 use App\Support\Hours;
+use Brick\Math\BigDecimal;
 use Flux\Flux;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -33,6 +36,12 @@ new class extends Component {
     /** @var array<int, array<string, string>> Propozycje AI wg raportu i pola (performed/remaining) */
     public array $suggestions = [];
 
+    /** @var array<string, string> Kilometry wg dnia kilometrówki (klucz: osoba-klient-data) */
+    public array $mileageKm = [];
+
+    /** @var array<string, string> Trasa wg dnia kilometrówki */
+    public array $mileageRoute = [];
+
     public function mount(WorkWeek $workWeek): void
     {
         $this->workWeek = $workWeek;
@@ -40,6 +49,8 @@ new class extends Component {
         foreach ($this->reports as $report) {
             $this->loadReport($report);
         }
+
+        $this->loadMileage();
     }
 
     /**
@@ -229,6 +240,16 @@ new class extends Component {
             return;
         }
 
+        $withoutKm = collect(app(MileageCalculator::class)->trips(collect([$this->workWeek])))
+            ->filter(fn (MileageTrip $trip) => $trip->needsKm())
+            ->map(fn (MileageTrip $trip) => $trip->date->format('d.m'));
+
+        if ($withoutKm->isNotEmpty()) {
+            $this->addError('close', __('Enter the mileage kilometres for: :days.', ['days' => $withoutKm->unique()->implode(', ')]));
+
+            return;
+        }
+
         $this->workWeek->close(Auth::user());
         Flux::toast(variant: 'success', text: __('Week closed.'));
     }
@@ -237,8 +258,68 @@ new class extends Component {
     {
         $this->authorize('close-weeks');
 
+        if ($this->workWeek->settlements()->exists()) {
+            $this->addError('close', __('This week is already settled. Delete the draft invoice of the settlement first.'));
+
+            return;
+        }
+
         $this->workWeek->reopen();
         Flux::toast(variant: 'success', text: __('Week reopened.'));
+    }
+
+    /**
+     * Dni z kilometrówką w tej części tygodnia (pracownik widzi swoje).
+     *
+     * @return list<MileageTrip>
+     */
+    #[Computed]
+    public function mileageTrips(): array
+    {
+        return app(MileageCalculator::class)->trips(collect([$this->workWeek]), user: $this->seesAll() ? null : Auth::user());
+    }
+
+    public function saveMileage(string $key): void
+    {
+        $this->authorize('log-own-time');
+        abort_if($this->workWeek->isClosed(), 403);
+
+        $trip = collect($this->mileageTrips)->first(fn (MileageTrip $trip) => $trip->key() === $key);
+        abort_if($trip === null, 404);
+
+        $this->validate([
+            "mileageKm.{$key}" => ['nullable', 'numeric', 'min:0', 'max:9999', 'decimal:0,1'],
+            "mileageRoute.{$key}" => ['nullable', 'string', 'max:500'],
+        ], attributes: ["mileageKm.{$key}" => __('km'), "mileageRoute.{$key}" => __('Route')]);
+
+        $km = trim((string) ($this->mileageKm[$key] ?? ''));
+        $route = trim((string) ($this->mileageRoute[$key] ?? ''));
+
+        // Wartości równe wyliczonym nie są poprawką.
+        $autoKm = count($trip->projects) === 1 && $trip->projects[0]->km_one_way !== null
+            ? (string) BigDecimal::of($trip->projects[0]->km_one_way)->multipliedBy(2)
+            : null;
+        $autoRoute = MileageCalculator::route($trip->client, $trip->projects);
+
+        app(MileageCalculator::class)->saveDay(
+            $trip->user,
+            $trip->client,
+            $trip->date,
+            $km === '' || ($autoKm !== null && BigDecimal::of($km)->isEqualTo($autoKm)) ? null : $km,
+            $route === '' || $route === $autoRoute ? null : $route,
+        );
+
+        unset($this->mileageTrips);
+        $this->loadMileage();
+        Flux::toast(variant: 'success', text: __('Mileage saved.'));
+    }
+
+    private function loadMileage(): void
+    {
+        foreach ($this->mileageTrips as $trip) {
+            $this->mileageKm[$trip->key()] = $trip->kmLabel();
+            $this->mileageRoute[$trip->key()] = $trip->route;
+        }
     }
 
     public function seesAll(): bool
@@ -312,6 +393,58 @@ new class extends Component {
                 </flux:button>
             @endforeach
         </div>
+    @endif
+
+    @if ($this->mileageTrips !== [])
+        <flux:card class="space-y-4">
+            <div>
+                <flux:heading size="lg">{{ __('Mileage') }}</flux:heading>
+                <flux:text>{{ __('One trip per day: base → sites → base. With one project the distance is 2 × one way; with several projects enter the kilometres.') }}</flux:text>
+            </div>
+
+            <flux:table>
+                <flux:table.columns>
+                    <flux:table.column>{{ __('Date') }}</flux:table.column>
+                    @if ($this->seesAll())
+                        <flux:table.column>{{ __('Person') }}</flux:table.column>
+                    @endif
+                    <flux:table.column>{{ __('Route') }}</flux:table.column>
+                    <flux:table.column align="end">{{ __('km') }}</flux:table.column>
+                    <flux:table.column></flux:table.column>
+                </flux:table.columns>
+                <flux:table.rows>
+                    @foreach ($this->mileageTrips as $trip)
+                        <flux:table.row :key="'trip-'.$trip->key()">
+                            <flux:table.cell>{{ $trip->date->format('d.m.Y') }}</flux:table.cell>
+                            @if ($this->seesAll())
+                                <flux:table.cell>{{ $trip->user->name }}</flux:table.cell>
+                            @endif
+                            <flux:table.cell class="min-w-80">
+                                @if ($workWeek->isClosed())
+                                    {{ $trip->route }}
+                                @else
+                                    <flux:input size="sm" wire:model="mileageRoute.{{ $trip->key() }}" />
+                                @endif
+                            </flux:table.cell>
+                            <flux:table.cell align="end" class="w-28">
+                                @if ($workWeek->isClosed())
+                                    {{ $trip->kmLabel() ?: '—' }}
+                                @else
+                                    <flux:input size="sm" wire:model="mileageKm.{{ $trip->key() }}" inputmode="decimal" :invalid="$trip->needsKm()" :placeholder="__('km')" />
+                                @endif
+                            </flux:table.cell>
+                            <flux:table.cell align="end">
+                                @unless ($workWeek->isClosed())
+                                    <flux:button size="sm" variant="ghost" icon="check" wire:click="saveMileage('{{ $trip->key() }}')" :aria-label="__('Save')" />
+                                @endunless
+                            </flux:table.cell>
+                        </flux:table.row>
+                    @endforeach
+                </flux:table.rows>
+            </flux:table>
+
+            <flux:error name="mileage" />
+        </flux:card>
     @endif
 
     @forelse ($this->reports as $report)

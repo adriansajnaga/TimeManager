@@ -96,7 +96,7 @@ new class extends Component {
 
     public function render()
     {
-        $this->invoice->load(['items', 'advances.items', 'contractor', 'correctedInvoice', 'corrections', 'settlements']);
+        $this->invoice->load(['items', 'advances.items', 'contractor', 'correctedInvoice', 'corrections', 'settlements', 'settlement.workWeeks']);
 
         return $this->view()->title($this->invoice->displayNumber());
     }
@@ -139,6 +139,10 @@ new class extends Component {
         <div class="flex flex-wrap gap-2">
             @if ($invoice->isSales())
                 <flux:button icon="document-arrow-down" :href="route('invoices.pdf', $invoice)" target="_blank">{{ __('PDF') }}</flux:button>
+            @endif
+
+            @if ($invoice->settlement)
+                <flux:button icon="document-duplicate" :href="route('invoices.package', $invoice)" target="_blank">{{ __('Package (PDF)') }}</flux:button>
             @endif
 
             @if ($invoice->xml)

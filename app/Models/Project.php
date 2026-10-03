@@ -92,6 +92,14 @@ class Project extends Model
     }
 
     /**
+     * Przystanek na trasie kilometrówki: miejscowość budowy (albo nazwa miejsca/projektu).
+     */
+    public function routeStop(): string
+    {
+        return $this->site_city ?: ($this->site_name ?: $this->name);
+    }
+
+    /**
      * Etykieta na fakturze; gdy nie ustawiono — nazwa projektu.
      */
     public function invoiceLabel(): string

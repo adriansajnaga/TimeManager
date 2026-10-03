@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -130,6 +131,16 @@ class WorkWeek extends Model
     public function scopeClosed(Builder $query): void
     {
         $query->whereNotNull('closed_at');
+    }
+
+    /**
+     * Rozliczenia klientów, w których jest ta część tygodnia.
+     *
+     * @return BelongsToMany<Settlement, $this>
+     */
+    public function settlements(): BelongsToMany
+    {
+        return $this->belongsToMany(Settlement::class);
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Documents\Document;
+use App\Documents\MileageAllowance;
 use App\Documents\Montageauftrag;
 use App\Documents\PdfRenderer;
 use App\Documents\Stundennachweis;
@@ -14,6 +15,8 @@ use App\Models\TimeEntry;
 use App\Models\User;
 use App\Models\WeeklyReport;
 use App\Models\WorkWeek;
+use App\Services\Mileage\MileageCalculator;
+use App\Services\Mileage\MileageTrip;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
@@ -91,6 +94,32 @@ class DocumentController extends Controller
         $document = new Stundenzettel(Contractor::query()->findOrFail((int) $validated['client']), $weeks);
 
         return $this->pdf([$document], __('Timesheet'));
+    }
+
+    /**
+     * Kilometrówka klienta z wybranych, zamkniętych części tygodni (osobny dokument dla każdej osoby).
+     */
+    public function mileage(Request $request): Response
+    {
+        $validated = $request->validate([
+            'client' => ['required', 'integer', 'exists:contractors,id'],
+            'weeks' => ['required', 'array', 'min:1'],
+            'weeks.*' => ['integer', 'exists:work_weeks,id'],
+        ]);
+
+        /** @var Collection<int, WorkWeek> $weeks */
+        $weeks = WorkWeek::query()->closed()->whereIn('id', $validated['weeks'])->get();
+        $client = Contractor::query()->findOrFail((int) $validated['client']);
+
+        $documents = array_values(collect(app(MileageCalculator::class)->trips($weeks, $client))
+            ->map(fn (MileageTrip $trip) => $trip->user)
+            ->unique('id')
+            ->map(fn (User $user) => new MileageAllowance($client, $weeks, $user))
+            ->all());
+
+        abort_if($documents === [], 404);
+
+        return $this->pdf($documents, __('Mileage allowance'));
     }
 
     private function authorizeProject(User $user, Project $project): void

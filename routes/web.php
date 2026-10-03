@@ -20,9 +20,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('weeks/{workWeek}/stundennachweis/{user}/{contractor}', [DocumentController::class, 'stundennachweis'])->name('documents.stundennachweis');
     });
 
-    Route::get('documents/stundenzettel', [DocumentController::class, 'stundenzettel'])
-        ->middleware('can:manage-settlements')
-        ->name('documents.stundenzettel');
+    Route::middleware('can:manage-settlements')->group(function () {
+        Route::get('documents/stundenzettel', [DocumentController::class, 'stundenzettel'])->name('documents.stundenzettel');
+        Route::get('documents/mileage', [DocumentController::class, 'mileage'])->name('documents.mileage');
+        Route::livewire('settlements', 'pages::settlements.index')->name('settlements.index');
+    });
 
     Route::middleware('can:manage-contractors')->group(function () {
         Route::livewire('contractors', 'pages::contractors.index')->name('contractors.index');
@@ -44,6 +46,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('invoices/{invoice}/edit', 'pages::invoices.form')->name('invoices.edit');
         Route::get('invoices/{invoice}/pdf', [InvoiceController::class, 'pdf'])->name('invoices.pdf');
         Route::get('invoices/{invoice}/xml', [InvoiceController::class, 'xml'])->name('invoices.xml');
+        Route::get('invoices/{invoice}/package', [InvoiceController::class, 'package'])->name('invoices.package');
     });
 });
 

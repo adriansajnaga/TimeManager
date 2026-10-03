@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Documents\InvoicePdf;
 use App\Documents\PdfRenderer;
+use App\Documents\SettlementPackage;
 use App\Models\Invoice;
 use App\Services\Ksef\InvoiceQrCode;
 use Illuminate\Http\Response;
@@ -22,6 +23,19 @@ class InvoiceController extends Controller
         return response($renderer->render([$document], $invoice->kind->label().' '.$invoice->displayNumber()), 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="'.$document->filename().'"',
+        ]);
+    }
+
+    /**
+     * Pakiet dla klienta: faktura + Stundenzettel + kilometrówka + Montageaufträge (jeden PDF).
+     */
+    public function package(Invoice $invoice, SettlementPackage $package, PdfRenderer $renderer): Response
+    {
+        abort_unless($invoice->isSales(), 404);
+
+        return response($renderer->render($package->documents($invoice), $invoice->displayNumber()), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$package->filename($invoice).'"',
         ]);
     }
 

@@ -33,6 +33,11 @@
                         <flux:sidebar.item icon="inbox-arrow-down" :href="route('invoices.index', ['direction' => 'purchase'])" :current="request()->routeIs('invoices.*') && request('direction') === 'purchase'" wire:navigate>
                             {{ __('Purchase invoices') }}
                         </flux:sidebar.item>
+                        @can('manage-settlements')
+                            <flux:sidebar.item icon="calculator" :href="route('settlements.index')" :current="request()->routeIs('settlements.*')" wire:navigate>
+                                {{ __('Settlements') }}
+                            </flux:sidebar.item>
+                        @endcan
                     </flux:sidebar.group>
                 @endcan
 

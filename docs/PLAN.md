@@ -37,7 +37,6 @@ plus moduł faktur (sprzedaż, zakupy z KSeF, korekty, zaliczki, proformy). Wła
   - `KodWaluty` EUR, `P_6`, suma w polu stawki (5/8/2026: `P_13_10` przy `oo`) i `P_15`, bez `P_14_x`; `Adnotacje/P_18`=1;
   - wiersz: `P_8A` „Szt.”, `P_12`, `KursWaluty` w `FaWiersz` (4.3014);
   - nabywca krajowy (3/9/2026 z PM): `NIP`, `P_13_1`/`P_14_1`, `P_1M`, `DaneKontaktowe/Telefon` sprzedawcy; seria numerów wspólna z PM potwierdzona (5/8, 3/9).
-- **Faza 7:** test akceptacyjny na pakiecie 4/8/2026; dla KW 35 potrzebne godziny dzienne (lub PDF 2026_9_4).
 - **Serwer:** nazwa aplikacji (TM Time Manager / ASCOMM Hours & Invoices).
 
 ## Ustalenia z analizy starej aplikacji
@@ -60,7 +59,7 @@ plus moduł faktur (sprzedaż, zakupy z KSeF, korekty, zaliczki, proformy). Wła
 | 4 | Import ze starej bazy + raport zgodności | ✅ |
 | 5 | Moduł Faktury (samodzielny): VAT/KOR/ZAL/ROZ/proforma, PDF PL i PL/EN, kursy NBP, lista sprzedaży i zakupów | ✅ |
 | 6 | KSeF (test): wysyłka, numeracja z KSeF, status, pobieranie sprzedaży i zakupów, walidacja XSD, kod QR | ✅ |
-| 7 | Kilometrówka, materiały, rozliczenia godzin → szkic faktury, pakiet PDF, test akceptacyjny 4/8/2026 | ⏳ |
+| 7 | Kilometrówka, materiały, rozliczenia godzin → szkic faktury, pakiet PDF, test akceptacyjny 4/8/2026 | ✅ |
 | 8 | E-mail (SMTP z ustawień, szablony, logi) | ⏳ |
 | 9 | Projekty ryczałtowe i transze, dashboard | ⏳ |
 | 10 | Instrukcja wdrożenia | ⏳ |
@@ -78,6 +77,14 @@ plus moduł faktur (sprzedaż, zakupy z KSeF, korekty, zaliczki, proformy). Wła
 2. Czas pracy → KW 31: siatka projektów × dni, wpisy start/koniec/przerwa.
 3. Tygodnie → KW 32: opisy, materiały, PDF Montageauftrag, Stundennachweis, zamknij/otwórz.
 4. Tygodnie → zaznacz zamknięte części + klient → Stundenzettel (98,75 h × 38,00 € = 3.752,50 €).
+
+## Faza 7 — jak sprawdzić
+
+1. Czas pracy: wpis z „licz kilometry” → Tygodnie → sekcja „Kilometrówka”. Jeden projekt dnia: km = 2 × odległość w jedną stronę (z kartoteki projektu); kilka projektów: wpisz km (i ew. trasę). Tygodnia bez km nie da się zamknąć.
+2. Finanse → Rozliczenia → klient → zaznacz zamknięte, nierozliczone części tygodni → podgląd: godziny × stawka + km × stawka, opis pozycji z szablonu klienta (okres + etykiety projektów), materiał tylko jako informacja (rozliczany osobno).
+3. „Utwórz szkic faktury” → faktura (jedna pozycja albo osobno godziny i km — ustawienie klienta). Tygodnie są zafakturowane; usunięcie szkicu je zwalnia, a rozliczonego tygodnia nie da się otworzyć.
+4. Faktura → „Pakiet (PDF)”: dokumenty w kolejności z kartoteki klienta (Faktura → Stundenzettel → Kilometergeld → Montageaufträge, opcjonalnie Stundennachweis) w jednym pliku.
+5. Test akceptacyjny (`tests/Feature/SettlementsTest.php`): KW 31–32/2026 = 98,75 h × 38 € + 751 km × 0,30 € = 3 977,80 €.
 
 ## Faza 6 — jak sprawdzić
 

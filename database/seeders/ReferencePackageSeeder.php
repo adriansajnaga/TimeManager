@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Enums\Role;
 use App\Enums\WorkType;
+use App\Models\MileageDay;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
@@ -69,6 +70,12 @@ class ReferencePackageSeeder extends Seeder
                 'project_id' => $projects[$number],
             ], ['performed_work' => $text]);
         }
+
+        // 27.07: trzy projekty jednego dnia — km wpisane ręcznie, jak w pakiecie.
+        MileageDay::query()->updateOrCreate(
+            ['user_id' => $user->id, 'contractor_id' => Project::query()->where('number', '160226039')->value('contractor_id'), 'trip_date' => '2026-07-27'],
+            ['km' => '165', 'route' => 'Zum Brook 24113 Kiel -> Jagel -> Marinestützpunkt Eckernförde -> Hohn -> Zum Brook 24113 Kiel'],
+        );
 
         WorkWeek::query()
             ->whereIn('id', TimeEntry::query()->whereIn('work_date', array_keys(self::DAYS))->pluck('work_week_id'))

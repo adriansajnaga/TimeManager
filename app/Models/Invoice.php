@@ -12,6 +12,7 @@ use App\Enums\KsefStatus;
 use App\Enums\PaymentMethod;
 use App\Models\Concerns\LogsActivity;
 use App\Services\Invoices\VatSummary;
+use App\Services\Settlements\SettlementService;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Carbon\CarbonImmutable;
@@ -24,6 +25,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Faktura sprzedaży albo zakupu (VAT, korekta, zaliczkowa, rozliczeniowa, proforma).
@@ -148,6 +150,23 @@ class Invoice extends Model
                 ->whereNull($query->qualifyColumn('ksef_environment'))
                 ->orWhere($query->qualifyColumn('ksef_environment'), KsefSetting::current()->environment->value));
         });
+
+        // Usunięty szkic z rozliczenia zwalnia jego tygodnie do ponownego rozliczenia.
+        static::deleting(function (Invoice $invoice) {
+            $settlement = $invoice->settlement()->first();
+
+            if ($settlement !== null) {
+                app(SettlementService::class)->release($settlement);
+            }
+        });
+    }
+
+    /**
+     * @return HasOne<Settlement, $this>
+     */
+    public function settlement(): HasOne
+    {
+        return $this->hasOne(Settlement::class);
     }
 
     /**
