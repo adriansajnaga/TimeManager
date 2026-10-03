@@ -11,6 +11,8 @@ use App\Services\Invoices\InvoiceTransmitter;
 use App\Services\Ksef\KsefClient;
 use App\Services\Ksef\KsefInvoiceNumbering;
 use App\Services\Ksef\KsefInvoiceSender;
+use App\Services\Mailbox\ImapMailbox;
+use App\Services\Mailbox\Mailbox;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -29,6 +31,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(KsefClient::class, fn () => KsefClient::forCurrentSettings());
         $this->app->bind(InvoiceNumbering::class, KsefInvoiceNumbering::class);
         $this->app->bind(InvoiceTransmitter::class, KsefInvoiceSender::class);
+        $this->app->scoped(Mailbox::class, fn () => ImapMailbox::fromSettings());
     }
 
     /**

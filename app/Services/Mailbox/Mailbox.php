@@ -1,0 +1,44 @@
+<?php
+
+namespace App\Services\Mailbox;
+
+/**
+ * Skrzynka firmowa do przeglądania (tylko odczyt).
+ */
+interface Mailbox
+{
+    /**
+     * @return list<MailFolder>
+     *
+     * @throws MailboxException
+     */
+    public function folders(): array;
+
+    /**
+     * Wiadomości folderu od najnowszych.
+     *
+     * @return array{messages: list<MailSummary>, total: int}
+     *
+     * @throws MailboxException
+     */
+    public function messages(string $folder, int $page, int $perPage, string $search = ''): array;
+
+    /**
+     * @throws MailboxException
+     */
+    public function message(string $folder, int $uid): MailMessage;
+
+    /**
+     * Załącznik z treścią.
+     *
+     * @throws MailboxException
+     */
+    public function attachment(string $folder, int $uid, int $index): MailAttachment;
+
+    /**
+     * Sprawdza logowanie (test połączenia).
+     *
+     * @throws MailboxException
+     */
+    public function ping(): void;
+}

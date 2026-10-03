@@ -3,6 +3,7 @@
 use App\Http\Controllers\ContractorLogoController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\MailboxController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route('dashboard'))->name('home');
@@ -38,6 +39,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('projects/create', 'pages::projects.form')->name('projects.create');
         Route::livewire('projects/{project}/edit', 'pages::projects.form')->name('projects.edit');
         Route::livewire('projects/{project}', 'pages::projects.show')->name('projects.show');
+    });
+
+    Route::middleware('can:use-mailbox')->group(function () {
+        Route::livewire('mailbox', 'pages::mailbox.index')->name('mailbox.index');
+        Route::livewire('mailbox/message', 'pages::mailbox.show')->name('mailbox.show');
+        Route::get('mailbox/attachment', [MailboxController::class, 'attachment'])->name('mailbox.attachment');
     });
 
     Route::middleware('can:manage-invoices')->group(function () {

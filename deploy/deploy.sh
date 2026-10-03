@@ -11,7 +11,7 @@ fail() { echo "[deploy] BŁĄD: $*" >&2; exit 1; }
 
 # --- PHP: preferowana wersja >= 8.4.1 ze wszystkimi rozszerzeniami ----------
 log "Szukam wersji PHP"
-REQUIRED_EXT="ctype curl dom fileinfo filter gd hash mbstring openssl pdo_mysql session tokenizer xml"
+REQUIRED_EXT="ctype curl dom fileinfo filter gd hash iconv mbstring openssl pdo_mysql session tokenizer xml zip"
 PHP=""
 FALLBACK=""
 for candidate in \
@@ -51,9 +51,9 @@ missing=""
 for ext in $REQUIRED_EXT; do
     "$PHP" -r "exit(extension_loaded('$ext') ? 0 : 1);" || missing="$missing $ext"
 done
-# fileinfo (typy plików) i gd (obrazy w PDF) są potrzebne stronie, nie linii komend.
+# fileinfo (typy plików), gd (obrazy w PDF), iconv i zip (skrzynka IMAP) są potrzebne stronie, nie linii komend.
 COMPOSER_IGNORE=""
-for ext in fileinfo gd; do
+for ext in fileinfo gd iconv zip; do
     if [[ " $missing " == *" $ext "* ]]; then
         log "UWAGA: brak $ext w PHP CLI. Musi być włączone w PHP dla strony."
         missing="${missing/ $ext/}"

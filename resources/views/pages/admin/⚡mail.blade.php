@@ -2,6 +2,8 @@
 
 use App\Models\MailSetting;
 use App\Services\Invoices\InvoiceMailer;
+use App\Services\Mailbox\ImapMailbox;
+use App\Services\Mailbox\MailboxException;
 use Flux\Flux;
 use Illuminate\Mail\Message;
 use Illuminate\Support\Facades\Mail;
@@ -27,6 +29,12 @@ new #[Title('E-mail')] class extends Component {
 
     public string $bcc = '';
 
+    public string $imap_host = '';
+
+    public int|string $imap_port = 993;
+
+    public string $imap_encryption = 'ssl';
+
     public bool $hasPassword = false;
 
     public ?string $verifiedAt = null;
@@ -49,6 +57,9 @@ new #[Title('E-mail')] class extends Component {
             'from_address' => ['required', 'email', 'max:255'],
             'from_name' => ['nullable', 'string', 'max:255'],
             'bcc' => ['nullable', 'email', 'max:255'],
+            'imap_host' => ['nullable', 'string', 'max:255'],
+            'imap_port' => ['required', 'integer', 'between:1,65535'],
+            'imap_encryption' => ['required', Rule::in(MailSetting::ENCRYPTIONS)],
         ]);
 
         $settings = MailSetting::query()->first() ?? new MailSetting;
@@ -60,6 +71,9 @@ new #[Title('E-mail')] class extends Component {
             'from_address' => trim($this->from_address),
             'from_name' => trim($this->from_name) ?: null,
             'bcc' => trim($this->bcc) ?: null,
+            'imap_host' => trim($this->imap_host) ?: null,
+            'imap_port' => (int) $this->imap_port,
+            'imap_encryption' => $this->imap_encryption,
             'verified_at' => null,
         ]);
 
@@ -103,6 +117,21 @@ new #[Title('E-mail')] class extends Component {
         Flux::toast(variant: 'success', text: __('Test message sent to :email.', ['email' => $recipient]));
     }
 
+    public function testMailbox(): void
+    {
+        $this->authorize('manage-settings');
+
+        try {
+            ImapMailbox::fromSettings()->ping();
+        } catch (MailboxException $exception) {
+            $this->addError('mailbox', $exception->getMessage());
+
+            return;
+        }
+
+        Flux::toast(variant: 'success', text: __('The mailbox works.'));
+    }
+
     private function fillFrom(MailSetting $settings): void
     {
         $this->host = (string) $settings->host;
@@ -112,6 +141,9 @@ new #[Title('E-mail')] class extends Component {
         $this->from_address = (string) $settings->from_address;
         $this->from_name = (string) $settings->from_name;
         $this->bcc = (string) $settings->bcc;
+        $this->imap_host = (string) $settings->imap_host;
+        $this->imap_port = $settings->imap_port;
+        $this->imap_encryption = $settings->imap_encryption;
         $this->hasPassword = filled($settings->password);
         $this->verifiedAt = $settings->verified_at?->format('d.m.Y H:i');
     }
@@ -149,12 +181,31 @@ new #[Title('E-mail')] class extends Component {
                 <flux:input wire:model="bcc" type="email" :label="__('Hidden copy (BCC) of every e-mail')" />
             </div>
 
+            <flux:separator />
+
+            <div>
+                <flux:heading>{{ __('Reading mail (IMAP)') }}</flux:heading>
+                <flux:text size="sm">{{ __('Same mailbox: the user name and password above. Leave the server empty to hide the mailbox.') }}</flux:text>
+            </div>
+
+            <div class="grid gap-6 sm:grid-cols-[1fr_7rem_8rem]">
+                <flux:input wire:model="imap_host" :label="__('IMAP server')" placeholder="mail.example.com" />
+                <flux:input wire:model="imap_port" type="number" :label="__('Port')" />
+                <flux:select wire:model="imap_encryption" :label="__('Encryption')">
+                    @foreach (MailSetting::ENCRYPTIONS as $value)
+                        <flux:select.option :value="$value">{{ strtoupper($value) }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+            </div>
+
             <div class="flex flex-wrap gap-2">
                 <flux:button variant="primary" type="submit">{{ __('Save') }}</flux:button>
                 <flux:button icon="paper-airplane" wire:click="test" wire:loading.attr="disabled">{{ __('Send a test message to me') }}</flux:button>
+                <flux:button icon="inbox" wire:click="testMailbox" wire:loading.attr="disabled">{{ __('Test the mailbox') }}</flux:button>
             </div>
 
             <flux:error name="test" />
+            <flux:error name="mailbox" />
         </form>
     </flux:card>
 </section>

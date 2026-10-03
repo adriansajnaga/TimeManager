@@ -20,9 +20,13 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $from_address
  * @property string|null $from_name
  * @property string|null $bcc
+ * @property string|null $imap_host
+ * @property int $imap_port
+ * @property string $imap_encryption
+ * @property string|null $sent_folder
  * @property CarbonImmutable|null $verified_at
  */
-#[Fillable(['host', 'port', 'encryption', 'username', 'password', 'from_address', 'from_name', 'bcc', 'verified_at'])]
+#[Fillable(['host', 'port', 'encryption', 'username', 'password', 'from_address', 'from_name', 'bcc', 'imap_host', 'imap_port', 'imap_encryption', 'sent_folder', 'verified_at'])]
 #[Hidden(['password'])]
 class MailSetting extends Model
 {
@@ -39,6 +43,7 @@ class MailSetting extends Model
     {
         return [
             'port' => 'integer',
+            'imap_port' => 'integer',
             'password' => 'encrypted',
             'verified_at' => 'datetime',
         ];
@@ -46,12 +51,20 @@ class MailSetting extends Model
 
     public static function current(): self
     {
-        return static::query()->first() ?? new self(['port' => 465, 'encryption' => 'ssl']);
+        return static::query()->first() ?? new self(['port' => 465, 'encryption' => 'ssl', 'imap_port' => 993, 'imap_encryption' => 'ssl']);
     }
 
     public function isConfigured(): bool
     {
         return filled($this->host) && filled($this->from_address);
+    }
+
+    /**
+     * Skrzynka do przeglądania (IMAP) — ten sam login i hasło co SMTP.
+     */
+    public function hasMailbox(): bool
+    {
+        return filled($this->imap_host) && filled($this->username) && filled($this->password);
     }
 
     /**

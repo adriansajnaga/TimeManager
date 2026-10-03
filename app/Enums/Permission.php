@@ -16,4 +16,5 @@ enum Permission: string
     case ManageInvoices = 'manage-invoices';
     case ViewAllTimeEntries = 'view-all-time-entries';
     case LogOwnTime = 'log-own-time';
+    case UseMailbox = 'use-mailbox';
 }

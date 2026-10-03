@@ -15,8 +15,9 @@ Log: `~/TimeManager/storage/logs/deploy.log` — po każdym wdrożeniu sprawdź 
 
 Serwer nie potrzebuje Node.js: zbudowany frontend (`public/build`) jest w repozytorium.
 Biblioteki są w czystym PHP (mPDF, phpseclib, Anthropic SDK); PHP potrzebuje rozszerzeń:
-`ctype curl dom fileinfo filter gd hash mbstring openssl pdo_mysql session tokenizer xml`
-(`dom`/`libxml` — walidacja XML faktur ze schematem FA(3), `openssl` — szyfrowanie wysyłki do KSeF).
+`ctype curl dom fileinfo filter gd hash iconv mbstring openssl pdo_mysql session tokenizer xml zip`
+(`dom`/`libxml` — walidacja XML faktur ze schematem FA(3), `openssl` — szyfrowanie wysyłki do KSeF,
+`iconv`/`zip` — skrzynka pocztowa przez IMAP w czystym PHP; rozszerzenie `imap` nie jest potrzebne).
 
 ## Każde wdrożenie
 
@@ -81,6 +82,7 @@ Po zmianie `.env` zrób Deploy HEAD Commit (konfiguracja jest w cache).
    (uprawnienia: wystawianie i przeglądanie faktur). Faktury z testu znikają z list po przełączeniu.
    Potem Faktury → „Pobierz z KSeF” od 01.04.2026 (sprzedaż, także z PM, i zakupy).
 5. **E-mail**: serwer SMTP (np. `mail.<domena>`, port 465, SSL), skrzynka i hasło, nadawca → wiadomość testowa.
+   Odbiór poczty (Finanse → Poczta): serwer IMAP (np. `mail.<domena>`, port 993, SSL) — ten sam login i hasło → „Test skrzynki”.
 6. **Asystent AI** (opcjonalnie): klucz z console.anthropic.com → Test połączenia.
 7. **Kontrahenci**: stawka godzinowa i za km, adres bazowy kilometrówki, waluta, stawka VAT
    (Gärtner: `oo` — odwrotne obciążenie, `docs/PLAN.md`, decyzja 16), szablony opisu faktury i e-maila, kolejność dokumentów pakietu.
