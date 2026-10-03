@@ -7,6 +7,7 @@ use App\Enums\ProjectStatus;
 use App\Models\Invoice;
 use App\Models\MaterialEntry;
 use App\Models\Project;
+use App\Models\TimeEntry;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Support\Collection;
@@ -19,6 +20,31 @@ new class extends Component {
     public function mount(Project $project): void
     {
         $this->project = $project->load('contractor');
+    }
+
+    /**
+     * Dni pracy na projekcie od najnowszego: data, godziny, osoby, rodzaj i opisy wpisów.
+     *
+     * @return Collection<int, object{date: \Carbon\CarbonImmutable, week_id: int, hours: string, people: string, types: string, descriptions: string}>
+     */
+    #[Computed]
+    public function workingDays(): Collection
+    {
+        return $this->project->timeEntries()
+            ->with('user')
+            ->orderByDesc('work_date')
+            ->orderBy('start_time')
+            ->get()
+            ->groupBy(fn (TimeEntry $entry) => $entry->work_date->toDateString())
+            ->map(fn (Collection $entries) => (object) [
+                'date' => $entries->first()->work_date,
+                'week_id' => $entries->first()->work_week_id,
+                'hours' => (string) $entries->reduce(fn (BigDecimal $sum, TimeEntry $entry) => $sum->plus($entry->hours), BigDecimal::zero()),
+                'people' => $entries->map(fn (TimeEntry $entry) => $entry->user->name)->unique()->implode(', '),
+                'types' => $entries->map(fn (TimeEntry $entry) => $entry->work_type->label())->unique()->implode(', '),
+                'descriptions' => $entries->pluck('description')->filter()->unique()->implode(' · '),
+            ])
+            ->values();
     }
 
     public function hours(): BigDecimal
@@ -163,6 +189,43 @@ new class extends Component {
             </flux:card>
         @endcan
     @endif
+
+    <flux:card class="space-y-3">
+        <div class="flex flex-wrap items-baseline justify-between gap-2">
+            <flux:heading size="lg">{{ __('Working days') }}</flux:heading>
+            <flux:text>{{ __('Summary of hours') }}: <strong>{{ rtrim(rtrim(number_format((float) (string) $this->hours(), 2, ',', ' '), '0'), ',') }} h</strong> · {{ trans_choice(':count day|:count days', $this->workingDays->count(), ['count' => $this->workingDays->count()]) }}</flux:text>
+        </div>
+
+        @if ($this->workingDays->isEmpty())
+            <flux:text>{{ __('No hours logged yet.') }}</flux:text>
+        @else
+            <div class="max-h-[32rem] overflow-y-auto">
+                <flux:table>
+                    <flux:table.columns>
+                        <flux:table.column>{{ __('Date') }}</flux:table.column>
+                        <flux:table.column align="end">{{ __('Hours') }}</flux:table.column>
+                        <flux:table.column>{{ __('Person') }}</flux:table.column>
+                        <flux:table.column>{{ __('Type') }}</flux:table.column>
+                        <flux:table.column>{{ __('Description') }}</flux:table.column>
+                    </flux:table.columns>
+                    <flux:table.rows>
+                        @foreach ($this->workingDays as $day)
+                            <flux:table.row :key="'day-'.$day->date->toDateString()">
+                                <flux:table.cell class="whitespace-nowrap">
+                                    <flux:link :href="route('weeks.show', $day->week_id)" wire:navigate>{{ $day->date->format('d.m.Y') }}</flux:link>
+                                    <span class="text-xs text-zinc-500">{{ $day->date->translatedFormat('D') }}</span>
+                                </flux:table.cell>
+                                <flux:table.cell align="end">{{ rtrim(rtrim(number_format((float) $day->hours, 2, ',', ' '), '0'), ',') }}</flux:table.cell>
+                                <flux:table.cell>{{ $day->people }}</flux:table.cell>
+                                <flux:table.cell>{{ $day->types }}</flux:table.cell>
+                                <flux:table.cell class="max-w-md truncate" :title="$day->descriptions">{{ $day->descriptions }}</flux:table.cell>
+                            </flux:table.row>
+                        @endforeach
+                    </flux:table.rows>
+                </flux:table>
+            </div>
+        @endif
+    </flux:card>
 
     @if ($this->invoices->isNotEmpty())
         <flux:card class="space-y-3">

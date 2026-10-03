@@ -25,6 +25,14 @@
                     @endcan
                 </flux:sidebar.group>
 
+                @can('use-mailbox')
+                    <flux:sidebar.group :heading="__('Mail')" class="grid">
+                        <flux:sidebar.item icon="inbox" :href="route('mailbox.index')" :current="request()->routeIs('mailbox.*')" wire:navigate>
+                            {{ __('Inbox') }}
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+                @endcan
+
                 @can('manage-invoices')
                     <flux:sidebar.group :heading="__('Finance')" class="grid">
                         <flux:sidebar.item icon="document-text" :href="route('invoices.index')" :current="request()->routeIs('invoices.*') && request('direction') !== 'purchase'" wire:navigate>
@@ -33,11 +41,6 @@
                         <flux:sidebar.item icon="inbox-arrow-down" :href="route('invoices.index', ['direction' => 'purchase'])" :current="request()->routeIs('invoices.*') && request('direction') === 'purchase'" wire:navigate>
                             {{ __('Purchase invoices') }}
                         </flux:sidebar.item>
-                        @can('use-mailbox')
-                            <flux:sidebar.item icon="inbox" :href="route('mailbox.index')" :current="request()->routeIs('mailbox.*')" wire:navigate>
-                                {{ __('Mailbox') }}
-                            </flux:sidebar.item>
-                        @endcan
                         @can('manage-settlements')
                             <flux:sidebar.item icon="calculator" :href="route('settlements.index')" :current="request()->routeIs('settlements.*')" wire:navigate>
                                 {{ __('Settlements') }}
@@ -62,7 +65,8 @@
                 @endcanany
 
                 @canany(['manage-users', 'manage-settings'])
-                    <flux:sidebar.group :heading="__('Administration')" class="grid">
+                    {{-- Domyślnie zwinięta; rozwinięta, gdy jesteś na jednej z jej stron. --}}
+                    <flux:sidebar.group :heading="__('Administration')" icon="cog-6-tooth" expandable :expanded="request()->routeIs('admin.*')" class="grid">
                         @can('manage-users')
                             <flux:sidebar.item icon="users" :href="route('admin.users.index')" :current="request()->routeIs('admin.users.*')" wire:navigate>
                                 {{ __('Users') }}
@@ -87,7 +91,8 @@
                             <flux:sidebar.item icon="envelope" :href="route('admin.mail')" :current="request()->routeIs('admin.mail')" wire:navigate>
                                 {{ __('E-mail') }}
                             </flux:sidebar.item>
-                            @if (\App\Services\LegacyImport\LegacyImporter::isConfigured())
+                            {{-- Import tylko do czasu pierwszego importu ze starej aplikacji. --}}
+                            @if (\App\Services\LegacyImport\LegacyImporter::isConfigured() && ! \App\Models\TimeEntry::query()->whereNotNull('legacy_id')->exists())
                                 <flux:sidebar.item icon="arrow-down-tray" :href="route('admin.legacy-import')" :current="request()->routeIs('admin.legacy-import')" wire:navigate>
                                     {{ __('Import') }}
                                 </flux:sidebar.item>

@@ -128,3 +128,16 @@ test('the dashboard shows what is ready to settle and unpaid invoices', function
         ->assertDontSee('Unpaid invoices')
         ->assertDontSee('Ready to settle');
 });
+
+test('the project card lists the working days, newest first', function () {
+    $other = User::factory()->create(['name' => 'Anna Nowak']);
+    TimeEntry::factory()->for($this->admin)->for($this->project)->create(['work_date' => '2026-08-25', 'start_time' => '06:00', 'end_time' => '07:30', 'break_minutes' => 0, 'description' => 'Kabel verlegt']);
+    TimeEntry::factory()->for($this->admin)->for($this->project)->create(['work_date' => '2026-08-26', 'start_time' => '06:00', 'end_time' => '07:30', 'break_minutes' => 0]);
+    TimeEntry::factory()->for($other)->for($this->project)->create(['work_date' => '2026-08-26', 'start_time' => '08:00', 'end_time' => '09:00', 'break_minutes' => 0]);
+
+    $this->actingAs($this->admin)
+        ->get(route('projects.show', $this->project))
+        ->assertOk()
+        ->assertSeeInOrder(['26.08.2026', '2,5', 'Anna Nowak', '25.08.2026', '1,5', 'Kabel verlegt'])
+        ->assertSee('4 h');
+});
