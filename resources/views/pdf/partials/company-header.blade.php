@@ -8,7 +8,7 @@
         </td>
         <td class="right" style="width: 45mm;">
             @if ($companyLogo)
-                <img src="{{ $companyLogo }}" style="height: 16mm;" alt="">
+                <img src="{{ $companyLogo }}" style="height: 12.8mm;" alt="">
             @endif
         </td>
     </tr>

@@ -16,7 +16,7 @@
     <tr>
         <td style="width: 58%;">
             @if ($logo)
-                <img src="{{ $logo }}" style="height: 13mm; margin-bottom: 2mm;" alt=""><br>
+                <img src="{{ $logo }}" style="height: 10.4mm; margin-bottom: 2mm;" alt=""><br>
             @endif
             <h1>{{ $title }} {{ $invoice->number }}</h1>
             @if ($invoice->ksef_number)

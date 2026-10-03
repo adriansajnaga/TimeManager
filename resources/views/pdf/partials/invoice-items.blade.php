@@ -1,5 +1,5 @@
 {{-- Pozycje faktury: Lp., nazwa, ilość, j.m., cena netto, VAT, wartość netto. --}}
-<table class="data">
+<table class="data items">
     <tr>
         <th style="width: 7%;">{!! $th('position') !!}</th>
         <th>{!! $th('description') !!}</th>
