@@ -23,7 +23,7 @@ plus moduł faktur (sprzedaż, zakupy z KSeF, korekty, zaliczki, proformy). Wła
 | 13 | Moduł Faktury | Samodzielny, niezależny od projektów: ręczne faktury, lista sprzedaży i zakupów, KSeF. |
 | 14 | Asystent AI | Claude Opus 5.5 (Claude API, oficjalne SDK PHP): „AI: popraw” i „AI: na {język klienta}” przy opisach Montageauftrag; klucz API szyfrowany w Administracja → Asystent AI. |
 | 15 | PDF faktury | Układ z PM; wersja PL/EN z etykietami jak na fakturach z Excela („FAKTURA VAT / INVOICE”, „Sprzedawca / From”). |
-| 16 | VAT dla Gärtnera | `np II` (usługi UE, art. 28b / P_13_9) + adnotacja „odwrotne obciążenie / reverse charge” (P_18). Do potwierdzenia z XSD i fakturą Gärtnera z KSeF. |
+| 16 | VAT dla Gärtnera | `np II` (usługi UE, art. 28b / P_13_9) + adnotacja „odwrotne obciążenie / reverse charge” (P_18=1). Faktura 5/8/2026 z Aplikacji Podatnika KSeF miała `oo` (P_13_10 — krajowe odwrotne obciążenie) — **do potwierdzenia z księgową**; stawkę zmienia się w kartotece kontrahenta. |
 | — | Proformy | Własna seria `PF {nr}/{miesiąc}/{rok}`, poza KSeF. |
 | — | Kursy walut | Średni kurs NBP (tabela A) z ostatniego dnia roboczego przed datą sprzedaży (lub wystawienia); przycisk „Kurs NBP”, kurs można wpisać ręcznie. |
 | — | Baza na serwerze | Nowa baza `ascomm_tm`; stara `iascomm_tm` tylko jako źródło importu. |
@@ -32,7 +32,11 @@ plus moduł faktur (sprzedaż, zakupy z KSeF, korekty, zaliczki, proformy). Wła
 ## Otwarte pytania (przed fazą, której dotyczą)
 
 - **Stare rejestry faktur:** `ascomm_przychody/koszty/rozlwew` pochodzą z 2015–2016 i wskazują kontrahentów po ID z tabeli, której nie ma w dumpie; `tm_invoice` jest pusta. Do importu potrzebna tabela kontrahentów starego panelu ASCOMM, a dla faktur 2022–03/2026 inne źródło (Excel/PDF). Faktury od 04/2026 przyjdą z KSeF (faza 6).
-- **Faza 6:** XML faktury Gärtnera z KSeF — wzorzec pól FA(3) dla `np II` (P_13_9, P_18, NrVatUE/KodUE, KodWaluty EUR).
+- **Faza 6 — wzorce z KSeF** (XML z Aplikacji Podatnika, 08–09/2026; pliki nie trafiają do repozytorium — dane osobowe):
+  - nabywca z UE: `Podmiot2/DaneIdentyfikacyjne` = `KodUE` + `NrVatUE` (bez prefiksu) + `Nazwa`; `Adres/KodKraju` DE, `AdresL2` „D-24143 Kiel”; `JST`=2, `GV`=2;
+  - `KodWaluty` EUR, `P_6`, suma w polu stawki (5/8/2026: `P_13_10` przy `oo`) i `P_15`, bez `P_14_x`; `Adnotacje/P_18`=1;
+  - wiersz: `P_8A` „Szt.”, `P_12`, `KursWaluty` w `FaWiersz` (4.3014);
+  - nabywca krajowy (3/9/2026 z PM): `NIP`, `P_13_1`/`P_14_1`, `P_1M`, `DaneKontaktowe/Telefon` sprzedawcy; seria numerów wspólna z PM potwierdzona (5/8, 3/9).
 - **Faza 7:** test akceptacyjny na pakiecie 4/8/2026; dla KW 35 potrzebne godziny dzienne (lub PDF 2026_9_4).
 - **Serwer:** nazwa aplikacji (TM Time Manager / ASCOMM Hours & Invoices).
 

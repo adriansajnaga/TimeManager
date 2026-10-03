@@ -98,6 +98,10 @@ log "composer install"
 # Kroki z "post-autoload-dump" wykonujemy zaraz potem bez podprocesu.
 "$PHP" "$COMPOSER" install --no-dev --optimize-autoloader --no-interaction --no-progress --no-scripts $COMPOSER_IGNORE 2>&1
 rm -f "$APP/bootstrap/cache/packages.php" "$APP/bootstrap/cache/services.php"
+# Konfiguracja z cache poprzedniego wdrożenia może wskazywać inną bazę niż obecny .env,
+# a migracje muszą trafić tam, gdzie po wdrożeniu będzie czytać strona.
+# Tylko config:clear — optimize:clear czyści też cache w bazie, której przy pierwszym wdrożeniu jeszcze nie ma.
+"$PHP" artisan config:clear --no-ansi 2>&1
 "$PHP" artisan package:discover --no-ansi 2>&1
 
 log "Kopiuję pliki publiczne do $WEB"
@@ -108,8 +112,12 @@ cp "$APP/deploy/public_html/index.php" "$WEB/index.php"
 
 chmod -R u+rwX "$APP/storage" "$APP/bootstrap/cache"
 
+log "Baza danych (z .env)"
+"$PHP" artisan db:show --no-ansi 2>&1 | head -10 || log "  db:show nie zadziałał"
+
 log "Migracje"
 "$PHP" artisan migrate --force --no-interaction 2>&1
+"$PHP" artisan migrate:status --no-ansi 2>&1 | tail -4 || true
 
 log "Buduję cache"
 # Bez route:cache: w podkatalogu (/tm/) cache tras psuje stronę startową (405), jak w EM.
