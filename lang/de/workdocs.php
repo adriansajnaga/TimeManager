@@ -61,8 +61,6 @@ return [
         'sum' => 'Summe',
         'week_number' => 'Kalenderwoche',
         'route_hint' => 'Strecke von–nach [genaue Adresse: Straße, PLZ und Ort]',
-        'signature_employee' => 'Datum, Unterschrift des Mitarbeiters',
-        'signature_authorised' => 'Datum, Unterschrift des Bevollmächtigten',
         'invoice_line' => 'Kilometergeld',
     ],
 ];

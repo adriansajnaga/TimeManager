@@ -61,8 +61,6 @@ return [
         'sum' => 'Sum',
         'week_number' => 'Week number',
         'route_hint' => 'Route from-to [use an exact address: street name and city with postal code]',
-        'signature_employee' => 'Date, signature of the employee',
-        'signature_authorised' => 'Date, signature of the authorised person',
         'invoice_line' => 'Mileage allowance',
     ],
 ];

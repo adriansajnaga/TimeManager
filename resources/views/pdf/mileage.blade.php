@@ -61,13 +61,3 @@
         @endforeach
     </table>
 @endforeach
-
-<div class="spacer"></div>
-<div class="spacer"></div>
-
-<table class="layout small">
-    <tr>
-        <td style="width: 50%;">{{ $t('mileage.signature_employee') }}:<br><br>....................................................</td>
-        <td style="width: 50%;">{{ $t('mileage.signature_authorised') }}:<br><br>....................................................</td>
-    </tr>
-</table>

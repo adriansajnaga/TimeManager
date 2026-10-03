@@ -61,8 +61,6 @@ return [
         'sum' => 'Suma',
         'week_number' => 'Tydzień nr',
         'route_hint' => 'Trasa od–do [dokładny adres: ulica, kod pocztowy i miejscowość]',
-        'signature_employee' => 'Data, podpis pracownika',
-        'signature_authorised' => 'Data, podpis osoby upoważnionej',
         'invoice_line' => 'Kilometrówka',
     ],
 ];
