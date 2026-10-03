@@ -2,6 +2,7 @@
 
 use App\Enums\Permission;
 use App\Models\AiSetting;
+use App\Models\AiUsageLog;
 use App\Models\MaterialEntry;
 use App\Models\Project;
 use App\Models\TimeEntry;
@@ -35,6 +36,9 @@ new class extends Component {
 
     /** @var array<int, array<string, string>> Propozycje AI wg raportu i pola (performed/remaining) */
     public array $suggestions = [];
+
+    /** Koszt ostatniego zapytania do AI i szacowane saldo konta. */
+    public ?string $aiCost = null;
 
     /** @var array<string, string> Kilometry wg dnia kilometrówki (klucz: osoba-klient-data) */
     public array $mileageKm = [];
@@ -132,6 +136,8 @@ new class extends Component {
             return;
         }
 
+        $before = AiUsageLog::query()->max('id');
+
         try {
             $this->suggestions[$reportId][$field] = app(TextAssistant::class)->rewrite(
                 $text,
@@ -140,7 +146,28 @@ new class extends Component {
             );
         } catch (AiException $exception) {
             $this->addError("ai.$reportId.$field", $exception->getMessage());
+        } finally {
+            $this->aiCost = $this->costLine($before);
         }
+    }
+
+    /**
+     * „Koszt: $0,0032 · zostało ok. $4,97” po zapytaniu do AI (gdy zapisano zużycie).
+     */
+    private function costLine(mixed $before): ?string
+    {
+        $log = AiUsageLog::query()->when($before !== null, fn ($query) => $query->where('id', '>', $before))->latest('id')->first();
+
+        if ($log === null) {
+            return null;
+        }
+
+        $line = __('AI cost: $:cost', ['cost' => number_format((float) $log->cost_usd, 4, ',', ' ')]);
+        $balance = AiSetting::current()->estimatedBalance();
+
+        return $balance === null
+            ? $line
+            : $line.' · '.__('about $:balance left on the account', ['balance' => number_format($balance->toFloat(), 2, ',', ' ')]);
     }
 
     public function acceptSuggestion(int $reportId, string $field): void
@@ -507,6 +534,9 @@ new class extends Component {
                         <div class="flex gap-2">
                             <flux:button size="xs" variant="primary" icon="check" wire:click="acceptSuggestion({{ $report->id }}, 'performed')">{{ __('Use') }}</flux:button>
                             <flux:button size="xs" variant="ghost" wire:click="discardSuggestion({{ $report->id }}, 'performed')">{{ __('Discard') }}</flux:button>
+                            @if ($aiCost)
+                                <flux:text size="sm" class="ms-auto self-center">{{ $aiCost }}</flux:text>
+                            @endif
                         </div>
                     </div>
                 @endif
@@ -531,6 +561,9 @@ new class extends Component {
                         <div class="flex gap-2">
                             <flux:button size="xs" variant="primary" icon="check" wire:click="acceptSuggestion({{ $report->id }}, 'remaining')">{{ __('Use') }}</flux:button>
                             <flux:button size="xs" variant="ghost" wire:click="discardSuggestion({{ $report->id }}, 'remaining')">{{ __('Discard') }}</flux:button>
+                            @if ($aiCost)
+                                <flux:text size="sm" class="ms-auto self-center">{{ $aiCost }}</flux:text>
+                            @endif
                         </div>
                     </div>
                 @endif

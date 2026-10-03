@@ -64,7 +64,12 @@ final class SettlementService
 
         $hours = $entries->reduce(fn (BigDecimal $sum, TimeEntry $entry) => $sum->plus($entry->hours), BigDecimal::zero());
 
-        $labels = $entries->map(fn (TimeEntry $entry) => $entry->project->invoiceLabel())->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values()->all();
+        // Miejsca realizacji, każde raz (bez względu na wielkość liter, np. „TKMS GmbH” i „TKMS Gmbh”).
+        $labels = $entries->map(fn (TimeEntry $entry) => $entry->project->invoiceLabel())
+            ->unique(fn (string $label) => mb_strtolower($label))
+            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->all();
 
         $trips = $this->mileage->trips($weeks, $contractor);
 

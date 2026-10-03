@@ -120,7 +120,6 @@ final class MileageAllowance extends WorkDocument
         return [
             ...$this->common(),
             'client' => $this->client,
-            'clientLogo' => self::logoPath($this->client->logo_path),
             'user' => $this->user,
             'vehicle' => $this->client->vehicle ?? Vehicle::default(),
             'weeks' => $weeks,

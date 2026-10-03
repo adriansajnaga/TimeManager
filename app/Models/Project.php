@@ -100,11 +100,17 @@ class Project extends Model
     }
 
     /**
-     * Etykieta na fakturze; gdy nie ustawiono — nazwa projektu.
+     * Miejsce realizacji na fakturze: etykieta, a gdy jej brak — klient końcowy / miejsce, miejscowość, nazwa projektu.
      */
     public function invoiceLabel(): string
     {
-        return filled($this->invoice_label) ? $this->invoice_label : $this->name;
+        foreach ([$this->invoice_label, $this->site_name, $this->site_city] as $label) {
+            if (filled($label)) {
+                return trim((string) $label);
+            }
+        }
+
+        return $this->name;
     }
 
     /**

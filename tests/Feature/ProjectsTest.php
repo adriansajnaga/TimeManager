@@ -69,8 +69,8 @@ test('fixed price project requires a contract value', function () {
         ->assertHasErrors(['form.contract_value' => 'required']);
 });
 
-test('invoice label falls back to the project name', function () {
-    $project = Project::factory()->create(['name' => 'TKMS Halle 9', 'invoice_label' => null]);
+test('invoice label falls back to the project name without any site data', function () {
+    $project = Project::factory()->create(['name' => 'TKMS Halle 9', 'invoice_label' => null, 'site_name' => null, 'site_city' => null]);
 
     expect($project->invoiceLabel())->toBe('TKMS Halle 9');
 });
@@ -138,4 +138,12 @@ test('a new project copies the site from an earlier project', function () {
         ->assertSet('form.mileage_default', true)
         ->assertSet('form.invoice_label', 'TKMS Halle 9')
         ->assertDontSee('Earlier projects');
+});
+
+test('the invoice shows the place of work when a project has no label', function () {
+    $project = Project::factory()->make(['invoice_label' => null, 'site_name' => 'TKMS GmbH', 'site_city' => 'Kiel', 'name' => 'Geb. 112 - Lichtschienen']);
+
+    expect($project->invoiceLabel())->toBe('TKMS GmbH')
+        ->and(Project::factory()->make(['invoice_label' => 'TKMS Halle 9'])->invoiceLabel())->toBe('TKMS Halle 9')
+        ->and(Project::factory()->make(['invoice_label' => null, 'site_name' => null, 'site_city' => 'Kiel'])->invoiceLabel())->toBe('Kiel');
 });

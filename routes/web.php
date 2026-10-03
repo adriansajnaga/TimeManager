@@ -25,6 +25,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('can:manage-settlements')->group(function () {
         Route::get('documents/stundenzettel', [DocumentController::class, 'stundenzettel'])->name('documents.stundenzettel');
         Route::get('documents/mileage', [DocumentController::class, 'mileage'])->name('documents.mileage');
+        Route::get('documents/reports', [DocumentController::class, 'reports'])->name('documents.reports');
         Route::livewire('settlements', 'pages::settlements.index')->name('settlements.index');
     });
 

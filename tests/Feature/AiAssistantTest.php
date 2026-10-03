@@ -2,6 +2,7 @@
 
 use App\Enums\Language;
 use App\Models\AiSetting;
+use App\Models\AiUsageLog;
 use App\Models\Contractor;
 use App\Models\Project;
 use App\Models\TimeEntry;
@@ -207,3 +208,56 @@ test('the Claude assistant refuses to start without an API key', function () {
 
     ClaudeTextAssistant::fromSettings();
 })->throws(AiException::class);
+
+test('the cost of a request is computed from the tokens and the price list', function () {
+    expect((string) AiUsageLog::cost('claude-opus-5-5', 1000, 500))->toBe('0.014000')
+        ->and((string) AiUsageLog::cost('claude-haiku-4-5', 1000, 500))->toBe('0.003500')
+        ->and((string) AiUsageLog::cost('claude-sonnet-5-5', 0, 0, 1000, 1000))->toBe('0.002700');
+});
+
+test('the estimated balance subtracts the costs since it was entered and is shown after a suggestion', function () {
+    Livewire::actingAs($this->admin)
+        ->test('pages::admin.ai')
+        ->set('balance', '5.00')
+        ->call('saveBalance')
+        ->assertHasNoErrors();
+
+    $this->travel(1)->seconds();
+
+    $fake = new class implements TextAssistant
+    {
+        public function rewrite(string $text, string $section, ?Language $target): string
+        {
+            AiUsageLog::record('claude-opus-5-5', 1200, 300);
+
+            return 'Leitung verlegt.';
+        }
+
+        public function ping(): void {}
+    };
+    app()->instance(TextAssistant::class, $fake);
+
+    weekDetail($this->employee, $this->week)
+        ->set("performed.{$this->report->id}", 'leitung verlegt')
+        ->call('suggest', $this->report->id, 'performed', false)
+        ->assertSee('AI cost: $0,0108')
+        ->assertSee('about $4,99 left on the account');
+
+    expect(AiSetting::current()->estimatedBalance()?->toFloat())->toBe(4.9892);
+
+    Livewire::actingAs($this->admin)->test('pages::admin.ai')->assertSee('$4,99');
+});
+
+test('own instructions are saved and added to the assistant prompt', function () {
+    Livewire::actingAs($this->admin)
+        ->test('pages::admin.ai')
+        ->set('instructions', 'Schreibe „Unterverteilung” statt „Verteiler”.')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect(AiSetting::current()->instructions)->toBe('Schreibe „Unterverteilung” statt „Verteiler”.')
+        ->and(ClaudeTextAssistant::systemPrompt('performed', null, AiSetting::current()->instructions))
+        ->toContain('Additional instructions from the user')
+        ->toContain('Unterverteilung')
+        ->and(ClaudeTextAssistant::systemPrompt('performed', null, ''))->not->toContain('Additional instructions');
+});

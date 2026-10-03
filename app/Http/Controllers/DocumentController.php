@@ -97,6 +97,32 @@ class DocumentController extends Controller
     }
 
     /**
+     * Montageaufträge klienta z wybranych części tygodni (podgląd przed rozliczeniem).
+     */
+    public function reports(Request $request): Response
+    {
+        $validated = $request->validate([
+            'client' => ['required', 'integer', 'exists:contractors,id'],
+            'weeks' => ['required', 'array', 'min:1'],
+            'weeks.*' => ['integer', 'exists:work_weeks,id'],
+        ]);
+
+        $documents = array_values(WeeklyReport::query()
+            ->with(['project', 'workWeek'])
+            ->whereIn('work_week_id', $validated['weeks'])
+            ->whereHas('project', fn ($projects) => $projects->where('contractor_id', (int) $validated['client']))
+            ->get()
+            ->filter(fn (WeeklyReport $report) => $report->entries()->exists())
+            ->sortBy([fn (WeeklyReport $a, WeeklyReport $b) => $a->workWeek->starts_on <=> $b->workWeek->starts_on, fn (WeeklyReport $a, WeeklyReport $b) => strcmp($a->project->number, $b->project->number)])
+            ->map(fn (WeeklyReport $report) => new Montageauftrag($report))
+            ->all());
+
+        abort_if($documents === [], 404);
+
+        return $this->pdf($documents, __('Weekly reports'), 'Montageauftraege_'.now()->format('Y-m-d').'.pdf');
+    }
+
+    /**
      * Kilometrówka klienta z wybranych, zamkniętych części tygodni (osobny dokument dla każdej osoby).
      */
     public function mileage(Request $request): Response

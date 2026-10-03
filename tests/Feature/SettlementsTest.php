@@ -101,6 +101,8 @@ test('the mileage document shows the weeks, routes and allowance', function () {
     $html = view($document->view(), $document->data())->render();
 
     expect($html)->toContain('Kilometergeldabrechnung')
+        ->toContain('Auftraggeber: Gärtner Elektrotechnik GmbH')
+        ->toContain('ASCOMM Adrian Sajnaga')
         ->toContain('KW 31-32/2026')
         ->toContain('Marinestützpunkt Eckernförde')
         ->toContain('>751<')
@@ -109,6 +111,11 @@ test('the mileage document shows the weeks, routes and allowance', function () {
     $this->actingAs($this->admin)
         ->get(route('documents.mileage', ['client' => $this->gaertner->id, 'weeks' => $this->weeks->pluck('id')->all()]))
         ->assertOk();
+
+    $this->actingAs($this->admin)
+        ->get(route('documents.reports', ['client' => $this->gaertner->id, 'weeks' => $this->weeks->pluck('id')->all()]))
+        ->assertOk()
+        ->assertHeader('Content-Type', 'application/pdf');
 });
 
 test('deleting the draft invoice releases the weeks', function () {

@@ -212,7 +212,7 @@ new #[Title('Mailbox')] class extends Component {
             <nav class="space-y-1 overflow-y-auto">
                 @foreach ($folders as $item)
                     <button type="button" wire:click="openFolder(@js($item->path))"
-                        @class(['flex w-full items-center justify-between gap-2 rounded px-3 py-1.5 text-start text-sm', 'bg-zinc-200 font-semibold dark:bg-zinc-700' => $item->path === $folder, 'hover:bg-zinc-100 dark:hover:bg-zinc-800' => $item->path !== $folder])>
+                        @class(['flex h-9 w-full items-center justify-between gap-2 rounded-lg px-3 text-start text-sm', 'bg-zinc-800/5 font-medium text-zinc-800 dark:bg-white/10 dark:text-white' => $item->path === $folder, 'text-zinc-500 hover:bg-zinc-800/5 hover:text-zinc-800 dark:text-white/80 dark:hover:bg-white/[7%] dark:hover:text-white' => $item->path !== $folder])>
                         <span class="truncate">{{ $item->name }}</span>
                         @if ($item->unseen)
                             <flux:badge size="sm" color="blue">{{ $item->unseen }}</flux:badge>
@@ -226,26 +226,29 @@ new #[Title('Mailbox')] class extends Component {
                 <div class="min-h-0 flex-1 divide-y divide-zinc-200 overflow-y-auto dark:divide-zinc-700">
                     @forelse ($result['messages'] as $item)
                         <div wire:key="msg-{{ $item->uid }}" wire:click="open({{ $item->uid }})"
-                            @class(['group cursor-pointer px-3 py-2', 'bg-blue-50 dark:bg-blue-950/40' => $item->uid === $uid, 'hover:bg-zinc-50 dark:hover:bg-zinc-800' => $item->uid !== $uid])>
-                            <div class="flex items-center gap-2">
-                                <span @class(['size-2 shrink-0 rounded-full', 'bg-blue-600' => ! $item->seen, 'bg-transparent' => $item->seen]) title="{{ $item->seen ? __('Read') : __('Unread') }}"></span>
-                                <span @class(['flex-1 truncate text-sm', 'font-semibold text-zinc-900 dark:text-white' => ! $item->seen, 'text-zinc-600 dark:text-zinc-300' => $item->seen])>{{ $item->from }}</span>
-                                <span class="shrink-0 text-xs text-zinc-500">{{ $item->date?->isToday() ? $item->date->format('H:i') : $item->date?->format('d.m.y') }}</span>
+                            @class(['flex cursor-pointer items-center gap-2 px-3 py-2', 'bg-zinc-800/10 dark:bg-white/10' => $item->uid === $uid, 'hover:bg-zinc-800/5 dark:hover:bg-white/[7%]' => $item->uid !== $uid])>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-2">
+                                    <span @class(['size-2 shrink-0 rounded-full', 'bg-blue-500' => ! $item->seen, 'bg-transparent' => $item->seen]) title="{{ $item->seen ? __('Read') : __('Unread') }}"></span>
+                                    <span @class(['flex-1 truncate text-sm', 'font-semibold text-zinc-900 dark:text-white' => ! $item->seen, 'text-zinc-600 dark:text-zinc-300' => $item->seen])>{{ $item->from }}</span>
+                                    <span class="shrink-0 text-xs text-zinc-500">{{ $item->date?->isToday() ? $item->date->format('H:i') : $item->date?->format('d.m.y') }}</span>
+                                </div>
+                                <div class="flex items-center gap-2 ps-4">
+                                    <span @class(['flex-1 truncate text-sm', 'font-semibold text-zinc-900 dark:text-white' => ! $item->seen, 'text-zinc-500 dark:text-zinc-400' => $item->seen])>{{ $item->subject !== '' ? $item->subject : __('(no subject)') }}</span>
+                                    @if ($item->hasAttachments)
+                                        <flux:icon.paper-clip variant="micro" class="shrink-0 text-zinc-400" />
+                                    @endif
+                                </div>
                             </div>
-                            <div class="flex items-center gap-2 ps-4">
-                                <span @class(['flex-1 truncate text-sm', 'font-semibold' => ! $item->seen])>{{ $item->subject !== '' ? $item->subject : __('(no subject)') }}</span>
-                                @if ($item->hasAttachments)
-                                    <flux:icon.paper-clip variant="micro" class="shrink-0 text-zinc-400" />
-                                @endif
-                                <span class="hidden shrink-0 gap-1 group-hover:flex" wire:click.stop>
-                                    <flux:button size="xs" variant="ghost" :icon="$item->seen ? 'envelope' : 'envelope-open'"
-                                        wire:click="toggleSeen({{ $item->uid }}, {{ $item->seen ? 'false' : 'true' }})"
-                                        :aria-label="$item->seen ? __('Mark as unread') : __('Mark as read')" />
-                                    <flux:button size="xs" variant="ghost" icon="trash"
-                                        wire:click="delete({{ $item->uid }})"
-                                        :wire:confirm="$inTrash ? __('Delete this message permanently?') : null"
-                                        :aria-label="__('Delete')" />
-                                </span>
+                            {{-- Akcje zawsze widoczne: przeczytana/nieprzeczytana i usuń. --}}
+                            <div class="flex shrink-0 flex-col" wire:click.stop>
+                                <flux:button size="xs" variant="subtle" :icon="$item->seen ? 'envelope' : 'envelope-open'"
+                                    wire:click="toggleSeen({{ $item->uid }}, {{ $item->seen ? 'false' : 'true' }})"
+                                    :tooltip="$item->seen ? __('Mark as unread') : __('Mark as read')" />
+                                <flux:button size="xs" variant="subtle" icon="trash"
+                                    wire:click="delete({{ $item->uid }})"
+                                    :wire:confirm="$inTrash ? __('Delete this message permanently?') : null"
+                                    :tooltip="__('Delete')" />
                             </div>
                         </div>
                     @empty

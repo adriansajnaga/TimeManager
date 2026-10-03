@@ -1,32 +1,19 @@
-{{-- Kilometrówka na formularzu klienta (wzór: „Mileage allowance” Gärtnera). --}}
-<table class="layout">
-    <tr>
-        <td>
-            @if ($clientLogo)
-                <img src="{{ $clientLogo }}" style="height: 14mm;" alt="">
-            @else
-                <span class="bold" style="font-size: 11pt;">{{ $client->name }}</span>
-            @endif
-        </td>
-        <td class="right">
-            <span class="bold" style="font-size: 11pt;">{{ $t('week_short') }} {{ $period }}</span><br>
-            <span class="bold" style="font-size: 13pt;">{{ $t('mileage.title') }}</span>
-        </td>
-    </tr>
-</table>
+{{-- Kilometrówka wystawiana przez ASCOMM (nagłówek firmy); klient tylko jako zleceniodawca. --}}
+@include('pdf.partials.company-header')
 
 <div class="spacer"></div>
 
 <table class="layout">
     <tr>
         <td>
-            <span class="bold">{{ $company->name }}</span><br>
-            {{ collect([$company->street, trim($company->zip.' '.$company->city)])->filter()->implode(', ') }}<br>
-            {{ $t('name') }}: {{ $user->name }}
+            <h1>{{ $t('mileage.title') }}</h1>
+            <span class="small">{{ $t('client') }}: {{ $client->name }}</span>
         </td>
         <td class="right" style="width: 60mm;">
+            <span class="bold">{{ $t('week_short') }} {{ $period }}</span><br>
+            <span class="small">{{ $t('name') }}: {{ $user->name }}</span><br>
             @if ($vehicle)
-                {{ $t('mileage.vehicle') }}: <span class="bold">{{ $vehicle->displayName() }}</span>
+                <span class="small">{{ $t('mileage.vehicle') }}: {{ $vehicle->displayName() }}</span>
             @endif
         </td>
     </tr>

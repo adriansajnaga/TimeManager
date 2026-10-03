@@ -232,6 +232,9 @@ new #[Title('Settlements')] class extends Component {
                     <flux:button icon="document-text" target="_blank" :href="route('documents.stundenzettel', ['client' => $this->contractor->id, 'weeks' => $preview->weeks->pluck('id')->all()])">
                         {{ __('Timesheet (PDF)') }}
                     </flux:button>
+                    <flux:button icon="document-duplicate" target="_blank" :href="route('documents.reports', ['client' => $this->contractor->id, 'weeks' => $preview->weeks->pluck('id')->all()])">
+                        {{ __('Weekly reports (PDF)') }}
+                    </flux:button>
                     @if ($preview->trips !== [])
                         <flux:button icon="truck" target="_blank" :href="route('documents.mileage', ['client' => $this->contractor->id, 'weeks' => $preview->weeks->pluck('id')->all()])">
                             {{ __('Mileage (PDF)') }}

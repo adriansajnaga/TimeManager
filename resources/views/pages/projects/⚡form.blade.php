@@ -161,7 +161,7 @@ new class extends Component {
                     <flux:input
                         wire:model.live.debounce.400ms="form.invoice_label"
                         :label="__('Label on invoice')"
-                        :description="__('Projects with the same label are listed once on the invoice. Empty = project name.')"
+                        :description="__('Place of work on the invoice; the same label is listed once. Empty = end customer / site.')"
                     />
                 </div>
             </div>

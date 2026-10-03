@@ -11,6 +11,7 @@ use Anthropic\Core\Exceptions\BadRequestException;
 use Anthropic\Core\Exceptions\RateLimitException;
 use App\Enums\Language;
 use App\Models\AiSetting;
+use App\Models\AiUsageLog;
 
 /**
  * Asystent opisów prac na Claude API (oficjalne SDK Anthropic dla PHP).
@@ -23,6 +24,7 @@ final class ClaudeTextAssistant implements TextAssistant
     public function __construct(
         private readonly Client $client,
         private readonly string $model,
+        private readonly ?string $instructions = null,
     ) {}
 
     public static function fromSettings(): self
@@ -36,12 +38,13 @@ final class ClaudeTextAssistant implements TextAssistant
         return new self(
             new Client(apiKey: (string) $settings->api_key, requestOptions: ['timeout' => 60, 'maxRetries' => 2]),
             $settings->model,
+            $settings->instructions,
         );
     }
 
     public function rewrite(string $text, string $section, ?Language $target): string
     {
-        return $this->ask(self::systemPrompt($section, $target), $text);
+        return $this->ask(self::systemPrompt($section, $target, $this->instructions), $text);
     }
 
     public function ping(): void
@@ -54,7 +57,7 @@ final class ClaudeTextAssistant implements TextAssistant
      *
      * @param  'performed'|'remaining'  $section
      */
-    public static function systemPrompt(string $section, ?Language $target): string
+    public static function systemPrompt(string $section, ?Language $target, ?string $instructions = null): string
     {
         $sectionName = $section === 'remaining'
             ? '"Restarbeiten" (work still to be done)'
@@ -67,7 +70,7 @@ final class ClaudeTextAssistant implements TextAssistant
             null => 'the same language as the draft',
         };
 
-        return <<<PROMPT
+        $prompt = <<<PROMPT
         You help an electrician (electrical and telecommunication installation) write the {$sectionName} section of a weekly installation report ("Montageauftrag") for a German contractor.
         The user sends a draft. It may contain typos, missing diacritics or colloquial wording, and may be written in another language.
 
@@ -80,6 +83,15 @@ final class ClaudeTextAssistant implements TextAssistant
 
         Return only the rewritten text, without quotes, headings, explanations or alternatives.
         PROMPT;
+
+        $instructions = trim((string) $instructions);
+
+        // Wskazówki użytkownika (Administracja → Asystent AI) — styl, słownictwo, nazwy własne.
+        return $instructions === ''
+            ? $prompt
+            : $prompt.PHP_EOL.PHP_EOL
+                .'Additional instructions from the user (follow them unless they conflict with keeping the facts):'.PHP_EOL
+                .$instructions;
     }
 
     private function ask(string $system, string $text): string
@@ -111,6 +123,15 @@ final class ClaudeTextAssistant implements TextAssistant
         } catch (APIConnectionException) {
             throw new AiException(__('Cannot reach the AI service. Check the internet connection.'));
         }
+
+        // Koszt zapytania wg tokenów z odpowiedzi (saldo konta API nie udostępnia — liczymy sami).
+        AiUsageLog::record(
+            (string) $message->model,
+            $message->usage->inputTokens,
+            $message->usage->outputTokens,
+            $message->usage->cacheReadInputTokens ?? 0,
+            $message->usage->cacheCreationInputTokens ?? 0,
+        );
 
         if ($message->stopReason === 'refusal') {
             throw new AiException(__('The AI declined to rewrite this text.'));
