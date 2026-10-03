@@ -34,6 +34,13 @@ new #[Title('Mailbox')] class extends Component {
 
     public ?string $messageError = null;
 
+    public function updatedFolder(): void
+    {
+        $this->page = 1;
+        $this->search = '';
+        $this->uid = 0;
+    }
+
     public function updatedSearch(): void
     {
         $this->page = 1;
@@ -207,9 +214,10 @@ new #[Title('Mailbox')] class extends Component {
             @endcan
         </flux:callout>
     @else
-        <div class="grid min-h-0 flex-1 gap-4 lg:grid-cols-[12rem_22rem_1fr]">
+        {{-- Szerokie okno: foldery | lista | wiadomość; węższe: lista | wiadomość, foldery jako lista rozwijana. --}}
+        <div class="grid min-h-0 flex-1 gap-4 md:grid-cols-[minmax(16rem,22rem)_1fr] 2xl:grid-cols-[11rem_22rem_1fr]">
             {{-- Foldery --}}
-            <nav class="space-y-1 overflow-y-auto">
+            <nav class="hidden space-y-1 overflow-y-auto 2xl:block">
                 @foreach ($folders as $item)
                     <button type="button" wire:click="openFolder(@js($item->path))"
                         @class(['flex h-9 w-full items-center justify-between gap-2 rounded-lg px-3 text-start text-sm', 'bg-zinc-800/5 font-medium text-zinc-800 dark:bg-white/10 dark:text-white' => $item->path === $folder, 'text-zinc-500 hover:bg-zinc-800/5 hover:text-zinc-800 dark:text-white/80 dark:hover:bg-white/[7%] dark:hover:text-white' => $item->path !== $folder])>
@@ -222,7 +230,15 @@ new #[Title('Mailbox')] class extends Component {
             </nav>
 
             {{-- Lista wiadomości --}}
-            <div @class(['flex min-h-0 flex-col rounded-lg border border-zinc-200 dark:border-zinc-700', 'hidden lg:flex' => $uid !== 0])>
+            <div @class(['flex min-h-0 flex-col gap-2', 'hidden md:flex' => $uid !== 0])>
+                <div class="2xl:hidden">
+                    <flux:select wire:model.live="folder" size="sm">
+                        @foreach ($folders as $item)
+                            <flux:select.option :value="$item->path">{{ $item->name }}{{ $item->unseen ? ' ('.$item->unseen.')' : '' }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
+                </div>
+            <div class="flex min-h-0 flex-1 flex-col rounded-lg border border-zinc-200 dark:border-zinc-700">
                 <div class="min-h-0 flex-1 divide-y divide-zinc-200 overflow-y-auto dark:divide-zinc-700">
                     @forelse ($result['messages'] as $item)
                         <div wire:key="msg-{{ $item->uid }}" wire:click="open({{ $item->uid }})"
@@ -264,15 +280,16 @@ new #[Title('Mailbox')] class extends Component {
                     </div>
                 @endif
             </div>
+            </div>
 
-            {{-- Wiadomość --}}
-            <div class="flex min-h-0 flex-col rounded-lg border border-zinc-200 dark:border-zinc-700">
+            {{-- Wiadomość (na telefonie tylko po otwarciu) --}}
+            <div @class(['min-h-0 flex-col rounded-lg border border-zinc-200 dark:border-zinc-700', 'flex' => $uid !== 0, 'hidden md:flex' => $uid === 0])>
                 @if ($message)
                     <div class="space-y-3 border-b border-zinc-200 p-4 dark:border-zinc-700">
                         <div class="flex flex-wrap items-start justify-between gap-3">
                             <flux:heading size="lg">{{ $message->subject !== '' ? $message->subject : __('(no subject)') }}</flux:heading>
                             <div class="flex gap-1">
-                                <flux:button size="sm" variant="ghost" icon="arrow-left" wire:click="close" class="lg:hidden" :aria-label="__('Back')" />
+                                <flux:button size="sm" variant="ghost" icon="arrow-left" wire:click="close" class="md:hidden" :aria-label="__('Back')" />
                                 <flux:button size="sm" variant="ghost" icon="envelope" wire:click="toggleSeen({{ $message->uid }}, false)">{{ __('Mark as unread') }}</flux:button>
                                 <flux:button size="sm" variant="ghost" icon="trash" wire:click="delete({{ $message->uid }})"
                                     :wire:confirm="$inTrash ? __('Delete this message permanently?') : null">{{ __('Delete') }}</flux:button>
