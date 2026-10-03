@@ -5,6 +5,7 @@ use App\Enums\InvoiceStatus;
 use App\Models\Invoice;
 use App\Services\Invoices\InvoiceException;
 use App\Services\Invoices\InvoiceIssuer;
+use App\Services\Invoices\InvoiceMailer;
 use App\Services\Invoices\Parties;
 use Flux\Flux;
 use Livewire\Component;
@@ -57,6 +58,70 @@ new class extends Component {
         Flux::toast(text: __('Pro forma cancelled.'));
     }
 
+    public string $mailTo = '';
+
+    public string $mailCc = '';
+
+    public string $mailSubject = '';
+
+    public string $mailBody = '';
+
+    public string $mailAttachment = '';
+
+    /**
+     * Podgląd e-maila z szablonów klienta — wysyłka dopiero po „Wyślij” (decyzja 6).
+     */
+    public function prepareEmail(InvoiceMailer $mailer): void
+    {
+        $this->authorize('manage-invoices');
+
+        $draft = $mailer->draft($this->invoice, auth()->user());
+
+        $this->mailTo = $draft['to'];
+        $this->mailCc = $draft['cc'];
+        $this->mailSubject = $draft['subject'];
+        $this->mailBody = $draft['body'];
+        $this->mailAttachment = $draft['attachment'];
+        $this->resetErrorBag();
+
+        Flux::modal('invoice-email')->show();
+    }
+
+    public function sendEmail(InvoiceMailer $mailer): void
+    {
+        $this->authorize('manage-invoices');
+
+        $addresses = fn (string $value) => array_values(array_filter(array_map('trim', preg_split('/[,;\s]+/', $value) ?: [])));
+
+        $this->validate([
+            'mailTo' => ['required', 'string', 'max:1000'],
+            'mailCc' => ['nullable', 'string', 'max:1000'],
+            'mailSubject' => ['required', 'string', 'max:255'],
+            'mailBody' => ['required', 'string', 'max:10000'],
+        ]);
+
+        foreach (['mailTo', 'mailCc'] as $field) {
+            foreach ($addresses($this->{$field}) as $address) {
+                if (filter_var($address, FILTER_VALIDATE_EMAIL) === false) {
+                    $this->addError($field, __('":address" is not a valid e-mail address.', ['address' => $address]));
+
+                    return;
+                }
+            }
+        }
+
+        try {
+            $mailer->send($this->invoice, auth()->user(), $addresses($this->mailTo), $addresses($this->mailCc), $this->mailSubject, $this->mailBody);
+        } catch (InvoiceException $exception) {
+            $this->addError('mail', $exception->getMessage());
+
+            return;
+        }
+
+        Flux::modal('invoice-email')->close();
+        Flux::toast(variant: 'success', text: __('E-mail sent to :to.', ['to' => $this->mailTo]));
+    }
+
     public function refreshKsef(InvoiceIssuer $issuer): void
     {
         $this->authorize('manage-invoices');
@@ -96,7 +161,7 @@ new class extends Component {
 
     public function render()
     {
-        $this->invoice->load(['items', 'advances.items', 'contractor', 'correctedInvoice', 'corrections', 'settlements', 'settlement.workWeeks']);
+        $this->invoice->load(['items', 'advances.items', 'contractor', 'correctedInvoice', 'corrections', 'settlements', 'settlement.workWeeks', 'emailLogs.sender']);
 
         return $this->view()->title($this->invoice->displayNumber());
     }
@@ -143,6 +208,10 @@ new class extends Component {
 
             @if ($invoice->settlement)
                 <flux:button icon="document-duplicate" :href="route('invoices.package', $invoice)" target="_blank">{{ __('Package (PDF)') }}</flux:button>
+            @endif
+
+            @if ($invoice->isSales() && $invoice->isIssued())
+                <flux:button icon="envelope" wire:click="prepareEmail">{{ $invoice->emailed_at ? __('Send again') : __('Send by e-mail') }}</flux:button>
             @endif
 
             @if ($invoice->xml)
@@ -374,4 +443,44 @@ new class extends Component {
             @endforeach
         </flux:card>
     @endif
+    @if ($invoice->emailLogs->isNotEmpty())
+        <flux:card class="space-y-2">
+            <flux:heading>{{ __('E-mails') }}</flux:heading>
+            @foreach ($invoice->emailLogs as $log)
+                <flux:text>
+                    @if ($log->sent_at)
+                        <flux:badge size="sm" color="green">{{ $log->sent_at->format('d.m.Y H:i') }}</flux:badge>
+                    @else
+                        <flux:badge size="sm" color="red">{{ __('Failed') }}</flux:badge>
+                    @endif
+                    {{ implode(', ', $log->to) }} — {{ $log->subject }} ({{ $log->attachment }})
+                    @if ($log->sender) · {{ $log->sender->name }} @endif
+                    @if ($log->error) <br><span class="text-red-600">{{ $log->error }}</span> @endif
+                </flux:text>
+            @endforeach
+        </flux:card>
+    @endif
+
+    <flux:modal name="invoice-email" class="md:w-[40rem]">
+        <form wire:submit="sendEmail" class="space-y-5">
+            <flux:heading size="lg">{{ __('Send by e-mail') }}</flux:heading>
+
+            <flux:input wire:model="mailTo" :label="__('To')" :description="__('Several addresses separated by commas.')" />
+            <flux:input wire:model="mailCc" :label="__('Copy (CC)')" />
+            <flux:input wire:model="mailSubject" :label="__('Subject')" />
+            <flux:textarea wire:model="mailBody" :label="__('Message')" rows="8" />
+
+            <flux:text size="sm">{{ __('Attachment') }}: <strong>{{ $mailAttachment }}</strong></flux:text>
+
+            <flux:error name="mail" />
+
+            <div class="flex justify-end gap-2">
+                <flux:modal.close>
+                    <flux:button variant="ghost">{{ __('Cancel') }}</flux:button>
+                </flux:modal.close>
+                <flux:button variant="primary" type="submit" icon="paper-airplane" wire:loading.attr="disabled" data-test="send-invoice-email">{{ __('Send') }}</flux:button>
+            </div>
+        </form>
+    </flux:modal>
+
 </section>

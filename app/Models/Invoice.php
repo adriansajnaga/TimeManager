@@ -75,6 +75,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property CarbonImmutable|null $ksef_sent_at
  * @property string|null $ksef_error
  * @property string|null $xml
+ * @property CarbonImmutable|null $emailed_at
  * @property-read Collection<int, InvoiceItem> $items
  * @property-read Collection<int, Invoice> $advances
  */
@@ -136,6 +137,7 @@ class Invoice extends Model
             'ksef_status' => KsefStatus::class,
             'ksef_environment' => KsefEnvironment::class,
             'ksef_sent_at' => 'datetime',
+            'emailed_at' => 'datetime',
         ];
     }
 
@@ -159,6 +161,14 @@ class Invoice extends Model
                 app(SettlementService::class)->release($settlement);
             }
         });
+    }
+
+    /**
+     * @return HasMany<EmailLog, $this>
+     */
+    public function emailLogs(): HasMany
+    {
+        return $this->hasMany(EmailLog::class)->latest('id');
     }
 
     /**

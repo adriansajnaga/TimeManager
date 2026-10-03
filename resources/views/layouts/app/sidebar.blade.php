@@ -79,6 +79,9 @@
                             <flux:sidebar.item icon="shield-check" :href="route('admin.ksef')" :current="request()->routeIs('admin.ksef')" wire:navigate>
                                 {{ __('KSeF') }}
                             </flux:sidebar.item>
+                            <flux:sidebar.item icon="envelope" :href="route('admin.mail')" :current="request()->routeIs('admin.mail')" wire:navigate>
+                                {{ __('E-mail') }}
+                            </flux:sidebar.item>
                             @if (\App\Services\LegacyImport\LegacyImporter::isConfigured())
                                 <flux:sidebar.item icon="arrow-down-tray" :href="route('admin.legacy-import')" :current="request()->routeIs('admin.legacy-import')" wire:navigate>
                                     {{ __('Import') }}
