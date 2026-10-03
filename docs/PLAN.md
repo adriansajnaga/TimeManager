@@ -26,7 +26,7 @@ plus moduł faktur (sprzedaż, zakupy z KSeF, korekty, zaliczki, proformy). Wła
 | 16 | VAT dla Gärtnera | `np II` (usługi UE, art. 28b / P_13_9) + adnotacja „odwrotne obciążenie / reverse charge” (P_18=1). Faktura 5/8/2026 z Aplikacji Podatnika KSeF miała `oo` (P_13_10 — krajowe odwrotne obciążenie) — **do potwierdzenia z księgową**; stawkę zmienia się w kartotece kontrahenta. |
 | — | Proformy | Własna seria `PF {nr}/{miesiąc}/{rok}`, poza KSeF. |
 | — | Kursy walut | Średni kurs NBP (tabela A) z ostatniego dnia roboczego przed datą sprzedaży (lub wystawienia); przycisk „Kurs NBP”, kurs można wpisać ręcznie. |
-| — | Baza na serwerze | Nowa baza `ascomm_tm`; stara `iascomm_tm` tylko jako źródło importu. |
+| — | Baza na serwerze | Nowa baza aplikacji z `.env` (`DB_DATABASE`); stara aplikacja: `iascomm_timemanager` — tylko źródło importu (`LEGACY_DB_DATABASE`). |
 | — | Konta | Zakłada administrator. Samodzielna rejestracja tylko w pustej aplikacji (pierwsze konto = administrator). |
 
 ## Otwarte pytania (przed fazą, której dotyczą)
@@ -90,8 +90,8 @@ plus moduł faktur (sprzedaż, zakupy z KSeF, korekty, zaliczki, proformy). Wła
 
 ## Faza 4 — import na serwerze
 
-1. cPanel → Manage My Databases: dodaj użytkownika bazy nowej aplikacji do starej bazy `iascomm_tm` (wystarczy odczyt).
-2. W `/home/iascomm/TimeManager/.env` dopisz `LEGACY_DB_DATABASE=iascomm_tm` (oraz `LEGACY_DB_USERNAME` / `LEGACY_DB_PASSWORD`, jeśli to inny użytkownik), potem **Deploy HEAD Commit** (konfiguracja jest w cache).
+1. cPanel → Manage My Databases: dodaj użytkownika bazy nowej aplikacji do starej bazy `iascomm_timemanager` (wystarczy odczyt).
+2. W `/home/iascomm/TimeManager/.env` dopisz `LEGACY_DB_DATABASE=iascomm_timemanager` (oraz `LEGACY_DB_USERNAME` / `LEGACY_DB_PASSWORD`, jeśli to inny użytkownik), potem **Deploy HEAD Commit** (konfiguracja jest w cache).
 3. Administracja → Import: najpierw „Sprawdź bez zapisu”, potem „Importuj”. Oczekiwane: 7578 h w 156 tygodniach, 171 zamkniętych części, 170 zafakturowanych.
 4. Po imporcie usuń `LEGACY_DB_*` z `.env` i zrób deploy — pozycja Import zniknie z menu.
 
