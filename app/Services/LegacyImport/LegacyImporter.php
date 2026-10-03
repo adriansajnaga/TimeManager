@@ -204,7 +204,7 @@ final class LegacyImporter
                 'document_language' => $language,
                 'invoice_language' => $country === 'PL' ? InvoiceLanguage::Polish : InvoiceLanguage::PolishEnglish,
                 'currency' => $country === 'PL' ? 'PLN' : 'EUR',
-                'vat_code' => $country === 'PL' ? VatCode::Rate23 : VatCode::OutsideScopeEuServices,
+                'vat_code' => $country === 'PL' ? VatCode::Rate23 : VatCode::ReverseCharge,
                 'payment_days' => (int) $row->PAYDAY ?: 14,
                 'package_documents' => PackageDocument::defaultOrder(),
                 'invoice_description_template' => DefaultTemplates::invoiceDescription($language),

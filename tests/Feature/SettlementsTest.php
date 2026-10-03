@@ -14,6 +14,8 @@ use App\Models\Settlement;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Models\WorkWeek;
+use App\Services\Ksef\Fa3InvoiceBuilder;
+use App\Services\Ksef\Fa3Validator;
 use App\Services\Mileage\MileageCalculator;
 use App\Services\Settlements\SettlementService;
 use Database\Seeders\CompanySeeder;
@@ -71,11 +73,20 @@ test('the reference package 4/8/2026 settles to 3 977,80 €', function () {
     expect($invoice->gross)->toBe('3977.80')
         ->and($invoice->currency)->toBe('EUR')
         ->and($invoice->sale_date->toDateString())->toBe('2026-08-06')
-        ->and($invoice->items->sole()->vat_code)->toBe(VatCode::OutsideScopeEuServices)
+        ->and($invoice->items->sole()->vat_code)->toBe(VatCode::ReverseCharge)
         ->and($invoice->items->sole()->name)->toBe("Ausführungszeitraum: 27.07.2026 - 06.08.2026\n\n- BW Jagel, Kropp, Hohn\n- H-TEC Hamburg\n- MADEC\n- TKMS Halle 9\n- WTD71 ECK")
         ->and($settlement->workWeeks)->toHaveCount(3)
         ->and(WorkWeek::query()->whereNull('invoiced_at')->count())->toBe(0)
         ->and(app(SettlementService::class)->billableWeeks($this->gaertner))->toBeEmpty();
+
+    // Jak faktura 5/8/2026 z Aplikacji Podatnika: „oo” w P_13_10 i adnotacja P_18.
+    $invoice->forceFill(['number' => '4/8/2026'])->save();
+    $xml = app(Fa3InvoiceBuilder::class)->build($invoice->fresh());
+
+    expect(app(Fa3Validator::class)->errors($xml))->toBe([])
+        ->and($xml)->toContain('<P_13_10>3977.8</P_13_10>')
+        ->toContain('<P_18>1</P_18>')
+        ->toContain('<P_12>oo</P_12>');
 
     $documents = app(SettlementPackage::class)->documents($invoice->fresh());
 

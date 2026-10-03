@@ -83,7 +83,7 @@ Po zmianie `.env` zrób Deploy HEAD Commit (konfiguracja jest w cache).
 5. **E-mail**: serwer SMTP (np. `mail.<domena>`, port 465, SSL), skrzynka i hasło, nadawca → wiadomość testowa.
 6. **Asystent AI** (opcjonalnie): klucz z console.anthropic.com → Test połączenia.
 7. **Kontrahenci**: stawka godzinowa i za km, adres bazowy kilometrówki, waluta, stawka VAT
-   (Gärtner: `np II` — patrz `docs/PLAN.md`, decyzja 16), szablony opisu faktury i e-maila, kolejność dokumentów pakietu.
+   (Gärtner: `oo` — odwrotne obciążenie, `docs/PLAN.md`, decyzja 16), szablony opisu faktury i e-maila, kolejność dokumentów pakietu.
 8. **Użytkownicy**: konta pracowników (rola Pracownik — tylko własny czas i opisy).
 
 ## Codzienna praca

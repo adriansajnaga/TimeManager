@@ -40,7 +40,7 @@ class GaertnerSeeder extends Seeder
             'document_language' => Language::German,
             'invoice_language' => InvoiceLanguage::PolishEnglish,
             'currency' => 'EUR',
-            'vat_code' => VatCode::OutsideScopeEuServices,
+            'vat_code' => VatCode::ReverseCharge,
             'invoice_line_mode' => InvoiceLineMode::Single,
             'invoice_description_template' => DefaultTemplates::invoiceDescription(Language::German),
             'payment_days' => 14,

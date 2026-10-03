@@ -23,7 +23,7 @@ plus moduł faktur (sprzedaż, zakupy z KSeF, korekty, zaliczki, proformy). Wła
 | 13 | Moduł Faktury | Samodzielny, niezależny od projektów: ręczne faktury, lista sprzedaży i zakupów, KSeF. |
 | 14 | Asystent AI | Claude Opus 5.5 (Claude API, oficjalne SDK PHP): „AI: popraw” i „AI: na {język klienta}” przy opisach Montageauftrag; klucz API szyfrowany w Administracja → Asystent AI. |
 | 15 | PDF faktury | Układ z PM; wersja PL/EN z etykietami jak na fakturach z Excela („FAKTURA VAT / INVOICE”, „Sprzedawca / From”). |
-| 16 | VAT dla Gärtnera | `np II` (usługi UE, art. 28b / P_13_9) + adnotacja „odwrotne obciążenie / reverse charge” (P_18=1). Faktura 5/8/2026 z Aplikacji Podatnika KSeF miała `oo` (P_13_10 — krajowe odwrotne obciążenie) — **do potwierdzenia z księgową**; stawkę zmienia się w kartotece kontrahenta. |
+| 16 | VAT dla Gärtnera | `oo` (P_13_10) + adnotacja „odwrotne obciążenie / reverse charge” (P_18=1) — jak na fakturach z Aplikacji Podatnika KSeF (decyzja z 03.10.2026). Stawkę kontrahenta zmienia się w kartotece. |
 | — | Proformy | Własna seria `PF {nr}/{miesiąc}/{rok}`, poza KSeF. |
 | — | Kursy walut | Średni kurs NBP (tabela A) z ostatniego dnia roboczego przed datą sprzedaży (lub wystawienia); przycisk „Kurs NBP”, kurs można wpisać ręcznie. |
 | — | Baza na serwerze | Nowa baza aplikacji z `.env` (`DB_DATABASE`); stara aplikacja: `iascomm_timemanager` — tylko źródło importu (`LEGACY_DB_DATABASE`). |
@@ -110,7 +110,7 @@ plus moduł faktur (sprzedaż, zakupy z KSeF, korekty, zaliczki, proformy). Wła
 
 ## Faza 5 — jak sprawdzić
 
-1. Finanse → Faktury sprzedaży → Nowa faktura → Faktura VAT. Wybór nabywcy ustawia walutę, język faktury, termin płatności, rachunek i stawkę VAT (Gärtner: EUR, PL/EN, `np II`, 14 dni).
+1. Finanse → Faktury sprzedaży → Nowa faktura → Faktura VAT. Wybór nabywcy ustawia walutę, język faktury, termin płatności, rachunek i stawkę VAT (Gärtner: EUR, PL/EN, `oo`, 14 dni).
 2. Zapisz szkic → podgląd: braki przed wystawieniem, PDF (z dopiskiem „Projekt”).
 3. „Wystaw” dla VAT/KOR/ZAL/ROZ kończy się komunikatem o braku połączenia z KSeF — numer nadaje tylko KSeF (decyzja 4 i 5). Proforma wystawia się od razu (`PF 1/10/2026`).
 4. Korekta: na wystawionej fakturze „Więcej → Wystaw korektę” (pozycje przed korektą + po korekcie, sumy jako różnica).
