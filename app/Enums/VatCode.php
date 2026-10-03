@@ -36,6 +36,28 @@ enum VatCode: string
     }
 
     /**
+     * Oznaczenie w kolumnie VAT na fakturze: „23%”, „0% WDT”, „zw”, „np”, „oo”.
+     */
+    public function shortLabel(): string
+    {
+        return match ($this) {
+            self::ZeroDomestic => '0%',
+            self::ZeroIntraEu => '0% WDT',
+            self::ZeroExport => '0% EX',
+            self::OutsideScope, self::OutsideScopeEuServices => 'np',
+            default => $this->value.($this->percent() !== null ? '%' : ''),
+        };
+    }
+
+    /**
+     * Podatek rozlicza nabywca — na fakturze adnotacja „odwrotne obciążenie” (P_18 w FA(3)).
+     */
+    public function isReverseCharge(): bool
+    {
+        return $this === self::ReverseCharge || $this === self::OutsideScopeEuServices;
+    }
+
+    /**
      * Stawka procentowa, gdy pozycja jest opodatkowana kwotowo; null dla zw/oo/np i stawek 0%.
      */
     public function percent(): ?int

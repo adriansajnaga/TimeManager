@@ -20,3 +20,21 @@ table.grid td.num { text-align: center; }
 table.grid tr.strong td { font-weight: bold; }
 
 .text-box { height: 32mm; vertical-align: top; }
+
+/* Faktura (układ PM) */
+.inv { font-size: 8.5pt; }
+.inv h1 { font-size: 14pt; letter-spacing: 0.3pt; }
+.inv .en { font-size: 6.5pt; color: #555; font-weight: normal; }
+.inv .label { color: #555; }
+.inv .annotation { font-size: 9pt; font-weight: bold; margin-top: 1.5mm; }
+.inv .draft { color: #b91c1c; font-weight: bold; font-size: 9pt; margin-bottom: 2mm; }
+.inv .party { border: 0.2mm solid #999; padding: 2.5mm; height: 27mm; vertical-align: top; }
+.inv table.data { border-collapse: collapse; width: 100%; }
+.inv table.data th, .inv table.data td { border: 0.2mm solid #999; padding: 1mm 1.5mm; vertical-align: top; }
+.inv table.data th { background-color: #f1f1f1; font-size: 7pt; font-weight: bold; text-align: center; vertical-align: middle; }
+.inv table.data td.num { text-align: right; white-space: nowrap; }
+.inv table.data td.ctr { text-align: center; }
+.inv table.data tr.total td { font-weight: bold; background-color: #f1f1f1; }
+.inv .due { font-size: 11pt; font-weight: bold; }
+.inv .section { font-weight: bold; margin: 3mm 0 1mm 0; }
+.inv .note { font-size: 7.5pt; color: #333; margin-top: 1.5mm; }

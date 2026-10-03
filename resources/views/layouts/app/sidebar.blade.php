@@ -25,6 +25,17 @@
                     @endcan
                 </flux:sidebar.group>
 
+                @can('manage-invoices')
+                    <flux:sidebar.group :heading="__('Finance')" class="grid">
+                        <flux:sidebar.item icon="document-text" :href="route('invoices.index')" :current="request()->routeIs('invoices.*') && request('direction') !== 'purchase'" wire:navigate>
+                            {{ __('Sales invoices') }}
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="inbox-arrow-down" :href="route('invoices.index', ['direction' => 'purchase'])" :current="request()->routeIs('invoices.*') && request('direction') === 'purchase'" wire:navigate>
+                            {{ __('Purchase invoices') }}
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+                @endcan
+
                 @canany(['manage-projects', 'manage-contractors'])
                     <flux:sidebar.group :heading="__('Records')" class="grid">
                         @can('manage-projects')

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ContractorLogoController;
 use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\InvoiceController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route('dashboard'))->name('home');
@@ -34,6 +35,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('projects', 'pages::projects.index')->name('projects.index');
         Route::livewire('projects/create', 'pages::projects.form')->name('projects.create');
         Route::livewire('projects/{project}/edit', 'pages::projects.form')->name('projects.edit');
+    });
+
+    Route::middleware('can:manage-invoices')->group(function () {
+        Route::livewire('invoices', 'pages::invoices.index')->name('invoices.index');
+        Route::livewire('invoices/create', 'pages::invoices.form')->name('invoices.create');
+        Route::livewire('invoices/{invoice}', 'pages::invoices.show')->name('invoices.show');
+        Route::livewire('invoices/{invoice}/edit', 'pages::invoices.form')->name('invoices.edit');
+        Route::get('invoices/{invoice}/pdf', [InvoiceController::class, 'pdf'])->name('invoices.pdf');
     });
 });
 
