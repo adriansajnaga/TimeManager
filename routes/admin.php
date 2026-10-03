@@ -16,5 +16,6 @@ Route::middleware(['auth', 'verified'])->prefix('admin')->name('admin.')->group(
         Route::livewire('bank-accounts', 'pages::admin.bank-accounts')->name('bank-accounts');
         Route::livewire('vehicles', 'pages::admin.vehicles')->name('vehicles');
         Route::livewire('legacy-import', 'pages::admin.legacy-import')->name('legacy-import');
+        Route::livewire('ai', 'pages::admin.ai')->name('ai');
     });
 });

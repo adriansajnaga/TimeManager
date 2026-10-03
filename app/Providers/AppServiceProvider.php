@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Enums\Permission;
 use App\Models\User;
+use App\Services\Ai\ClaudeTextAssistant;
+use App\Services\Ai\TextAssistant;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +20,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(TextAssistant::class, fn () => ClaudeTextAssistant::fromSettings());
     }
 
     /**

@@ -21,6 +21,7 @@ plus moduł faktur (sprzedaż, zakupy z KSeF, korekty, zaliczki, proformy). Wła
 | 11 | Projekty godzinowe | Fakturowane są godziny z zamkniętych części tygodni, niezależnie od statusu projektu. |
 | 12 | Projekty ryczałtowe | Godziny tylko informacyjnie; faktura po zakończeniu projektu z bilansem godzin i materiału, także transze/zaliczki (ZAL/ROZ). |
 | 13 | Moduł Faktury | Samodzielny, niezależny od projektów: ręczne faktury, lista sprzedaży i zakupów, KSeF. |
+| 14 | Asystent AI | Claude Opus 5.5 (Claude API, oficjalne SDK PHP): „AI: popraw” i „AI: na {język klienta}” przy opisach Montageauftrag; klucz API szyfrowany w Administracja → Asystent AI. |
 | — | Baza na serwerze | Nowa baza `ascomm_tm`; stara `iascomm_tm` tylko jako źródło importu. |
 | — | Konta | Zakłada administrator. Samodzielna rejestracja tylko w pustej aplikacji (pierwsze konto = administrator). |
 

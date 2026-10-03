@@ -1,11 +1,14 @@
 <?php
 
 use App\Enums\Permission;
+use App\Models\AiSetting;
 use App\Models\MaterialEntry;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\WeeklyReport;
 use App\Models\WorkWeek;
+use App\Services\Ai\AiException;
+use App\Services\Ai\TextAssistant;
 use App\Support\Hours;
 use Flux\Flux;
 use Illuminate\Support\Collection;
@@ -26,6 +29,9 @@ new class extends Component {
 
     /** @var array<int, list<array{name: string, quantity: string, unit: string}>> */
     public array $materials = [];
+
+    /** @var array<int, array<string, string>> Propozycje AI wg raportu i pola (performed/remaining) */
+    public array $suggestions = [];
 
     public function mount(WorkWeek $workWeek): void
     {
@@ -95,6 +101,56 @@ new class extends Component {
             ->distinct()
             ->orderBy('users.name')
             ->get();
+    }
+
+    /**
+     * Propozycja AI dla pola opisu: poprawa w tym samym języku albo tłumaczenie na język dokumentów klienta.
+     */
+    public function suggest(int $reportId, string $field, bool $translate): void
+    {
+        abort_unless(in_array($field, ['performed', 'remaining'], true), 404);
+
+        $report = WeeklyReport::query()->with('project.contractor', 'workWeek')->findOrFail($reportId);
+        $this->authorize('update', $report);
+
+        $text = trim($this->{$field}[$reportId] ?? '');
+
+        if ($text === '') {
+            $this->addError("ai.$reportId.$field", __('Write a draft first.'));
+
+            return;
+        }
+
+        try {
+            $this->suggestions[$reportId][$field] = app(TextAssistant::class)->rewrite(
+                $text,
+                $field,
+                $translate ? $report->project->contractor->document_language : null,
+            );
+        } catch (AiException $exception) {
+            $this->addError("ai.$reportId.$field", $exception->getMessage());
+        }
+    }
+
+    public function acceptSuggestion(int $reportId, string $field): void
+    {
+        abort_unless(in_array($field, ['performed', 'remaining'], true), 404);
+
+        if (isset($this->suggestions[$reportId][$field])) {
+            $this->{$field}[$reportId] = $this->suggestions[$reportId][$field];
+        }
+
+        unset($this->suggestions[$reportId][$field]);
+    }
+
+    public function discardSuggestion(int $reportId, string $field): void
+    {
+        unset($this->suggestions[$reportId][$field]);
+    }
+
+    public function aiEnabled(): bool
+    {
+        return AiSetting::current()->isConfigured();
     }
 
     public function appendDescription(int $reportId, int $entryId): void
@@ -298,8 +354,54 @@ new class extends Component {
                 @endforeach
             </div>
 
-            <flux:textarea wire:model="performed.{{ $report->id }}" :label="__('Work performed')" rows="4" :disabled="! $editable" />
-            <flux:textarea wire:model="remaining.{{ $report->id }}" :label="__('Remaining work')" rows="2" :disabled="! $editable" />
+            <div class="space-y-2">
+                <flux:textarea wire:model="performed.{{ $report->id }}" :label="__('Work performed')" rows="4" :disabled="! $editable" />
+
+                @if ($editable && $this->aiEnabled())
+                    <div class="flex flex-wrap items-center gap-2">
+                        <flux:button size="xs" icon="sparkles" wire:click="suggest({{ $report->id }}, 'performed', false)" wire:loading.attr="disabled" wire:target="suggest">{{ __('AI: correct') }}</flux:button>
+                        <flux:button size="xs" icon="language" wire:click="suggest({{ $report->id }}, 'performed', true)" wire:loading.attr="disabled" wire:target="suggest">
+                            {{ __('AI: into :language', ['language' => $report->project->contractor->document_language->label()]) }}
+                        </flux:button>
+                        <flux:text wire:loading wire:target="suggest" class="text-xs">{{ __('Working…') }}</flux:text>
+                    </div>
+                    <flux:error name="ai.{{ $report->id }}.performed" />
+                @endif
+
+                @if (isset($suggestions[$report->id]['performed']))
+                    <div class="space-y-2 rounded-lg border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-sky-950/40">
+                        <flux:textarea wire:model="suggestions.{{ $report->id }}.performed" :label="__('AI suggestion')" rows="4" />
+                        <div class="flex gap-2">
+                            <flux:button size="xs" variant="primary" icon="check" wire:click="acceptSuggestion({{ $report->id }}, 'performed')">{{ __('Use') }}</flux:button>
+                            <flux:button size="xs" variant="ghost" wire:click="discardSuggestion({{ $report->id }}, 'performed')">{{ __('Discard') }}</flux:button>
+                        </div>
+                    </div>
+                @endif
+            </div>
+            <div class="space-y-2">
+                <flux:textarea wire:model="remaining.{{ $report->id }}" :label="__('Remaining work')" rows="2" :disabled="! $editable" />
+
+                @if ($editable && $this->aiEnabled())
+                    <div class="flex flex-wrap items-center gap-2">
+                        <flux:button size="xs" icon="sparkles" wire:click="suggest({{ $report->id }}, 'remaining', false)" wire:loading.attr="disabled" wire:target="suggest">{{ __('AI: correct') }}</flux:button>
+                        <flux:button size="xs" icon="language" wire:click="suggest({{ $report->id }}, 'remaining', true)" wire:loading.attr="disabled" wire:target="suggest">
+                            {{ __('AI: into :language', ['language' => $report->project->contractor->document_language->label()]) }}
+                        </flux:button>
+                        <flux:text wire:loading wire:target="suggest" class="text-xs">{{ __('Working…') }}</flux:text>
+                    </div>
+                    <flux:error name="ai.{{ $report->id }}.remaining" />
+                @endif
+
+                @if (isset($suggestions[$report->id]['remaining']))
+                    <div class="space-y-2 rounded-lg border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-sky-950/40">
+                        <flux:textarea wire:model="suggestions.{{ $report->id }}.remaining" :label="__('AI suggestion')" rows="2" />
+                        <div class="flex gap-2">
+                            <flux:button size="xs" variant="primary" icon="check" wire:click="acceptSuggestion({{ $report->id }}, 'remaining')">{{ __('Use') }}</flux:button>
+                            <flux:button size="xs" variant="ghost" wire:click="discardSuggestion({{ $report->id }}, 'remaining')">{{ __('Discard') }}</flux:button>
+                        </div>
+                    </div>
+                @endif
+            </div>
 
             <flux:field>
                 <flux:label>{{ __('Material') }}</flux:label>
