@@ -36,6 +36,9 @@ new #[Title('Invoices')] class extends Component {
     #[Url(except: '')]
     public string $search = '';
 
+    /** @var array<string, string> Faktury z KSeF, których nie udało się zapisać: numer KSeF => powód. */
+    public array $importFailures = [];
+
     /** Zakres pobierania z KSeF. */
     public string $ksefFrom = '';
 
@@ -92,8 +95,10 @@ new #[Title('Invoices')] class extends Component {
                 'confirmed' => $summary['confirmed'],
                 'known' => $summary['known'],
             ])
-                .($summary['failed'] !== [] ? ' '.__('Could not read: :numbers', ['numbers' => implode(', ', $summary['failed'])]) : ''),
+                .($summary['failed'] !== [] ? ' '.__('Could not read: :count — details below the list.', ['count' => count($summary['failed'])]) : ''),
         );
+
+        $this->importFailures = $summary['failed'];
 
         unset($this->invoices, $this->totals);
     }
@@ -297,6 +302,19 @@ new #[Title('Invoices')] class extends Component {
             @endforelse
         </flux:table.rows>
     </flux:table>
+
+    @if ($importFailures !== [])
+        <flux:callout icon="exclamation-triangle" color="amber" :heading="__('Not imported from KSeF')">
+            <flux:callout.text>{{ __('Run the download again — invoices skipped because of the KSeF request limit usually come in then. If a reason repeats, send it to support.') }}</flux:callout.text>
+            <flux:callout.text>
+                <ul class="mt-2 space-y-1 text-xs">
+                    @foreach ($importFailures as $number => $reason)
+                        <li><strong>{{ $number }}</strong> — {{ $reason }}</li>
+                    @endforeach
+                </ul>
+            </flux:callout.text>
+        </flux:callout>
+    @endif
 
     @if ($this->totals->isNotEmpty())
         <flux:card class="space-y-1">

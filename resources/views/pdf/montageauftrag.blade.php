@@ -1,4 +1,5 @@
-@include('pdf.partials.company-header')
+{{-- Montageauftrag bez logo (na życzenie) — sam nagłówek z danymi firmy. --}}
+@include('pdf.partials.company-header', ['companyLogo' => null])
 
 <div class="spacer"></div>
 <h1>{{ $t('montageauftrag') }}</h1>

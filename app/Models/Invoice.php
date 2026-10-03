@@ -12,6 +12,7 @@ use App\Enums\KsefStatus;
 use App\Enums\PaymentMethod;
 use App\Models\Concerns\LogsActivity;
 use App\Services\Invoices\VatSummary;
+use App\Services\Ksef\Fa3InvoiceReader;
 use App\Services\Settlements\SettlementService;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
@@ -302,7 +303,16 @@ class Invoice extends Model
      */
     public function isDeletable(): bool
     {
-        return ! $this->isSales() || $this->isDraft() || $this->isFromTestKsef();
+        if ($this->isFromTestKsef()) {
+            return true;
+        }
+
+        // Dokument z produkcyjnego KSeF (wystawiony albo pobrany) zostaje — poprawia się go korektą.
+        if ($this->isInKsef() || $this->source === InvoiceSource::Ksef) {
+            return false;
+        }
+
+        return $this->isSales() ? $this->isDraft() : $this->source === InvoiceSource::Manual;
     }
 
     public function isInKsef(): bool
@@ -323,6 +333,19 @@ class Invoice extends Model
      */
     public function summary(): VatSummary
     {
+        // Faktura pobrana z KSeF: wiążące są sumy z jej XML, nie przeliczenie pozycji.
+        if ($this->source === InvoiceSource::Ksef && filled($this->xml)) {
+            try {
+                $totals = app(Fa3InvoiceReader::class)->totals((string) $this->xml);
+
+                if ($totals !== []) {
+                    return VatSummary::fromTotals($totals);
+                }
+            } catch (\Throwable) {
+                // Nieczytelny XML — zostaje przeliczenie z pozycji.
+            }
+        }
+
         $after = VatSummary::fromLines($this->items->where('is_before', false)->map(fn (InvoiceItem $item) => [
             'net' => $item->net, 'vat_code' => $item->vat_code,
         ]));

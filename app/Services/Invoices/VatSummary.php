@@ -23,6 +23,24 @@ final class VatSummary
     }
 
     /**
+     * Gotowe sumy wg stawek (np. z XML faktury pobranej z KSeF), bez przeliczania podatku.
+     *
+     * @param  array<string, array{net: BigDecimal|string, vat: BigDecimal|string}>  $totals  klucz = nazwa przypadku VatCode (np. Rate23)
+     */
+    public static function fromTotals(array $totals): self
+    {
+        $groups = [];
+
+        foreach (VatCode::cases() as $code) {
+            if (isset($totals[$code->name])) {
+                $groups[] = ['code' => $code, 'net' => BigDecimal::of($totals[$code->name]['net']), 'vat' => BigDecimal::of($totals[$code->name]['vat'])];
+            }
+        }
+
+        return new self($groups);
+    }
+
+    /**
      * @param  iterable<array{net: BigDecimal|string, vat_code: VatCode|string}>  $lines
      */
     public static function fromLines(iterable $lines): self

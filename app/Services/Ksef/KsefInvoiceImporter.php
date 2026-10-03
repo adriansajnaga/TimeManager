@@ -13,6 +13,7 @@ use App\Models\InvoiceItem;
 use App\Services\Invoices\Parties;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -31,7 +32,7 @@ class KsefInvoiceImporter
     ) {}
 
     /**
-     * @return array{sales: int, purchases: int, known: int, confirmed: int, failed: list<string>}
+     * @return array{sales: int, purchases: int, known: int, confirmed: int, failed: array<string, string>}
      */
     public function import(CarbonInterface $from, CarbonInterface $to): array
     {
@@ -58,7 +59,7 @@ class KsefInvoiceImporter
 
     /**
      * @param  array<string, mixed>  $metadata
-     * @param  array{sales: int, purchases: int, known: int, confirmed: int, failed: list<string>}  $summary
+     * @param  array{sales: int, purchases: int, known: int, confirmed: int, failed: array<string, string>}  $summary
      */
     private function importOne(array $metadata, InvoiceDirection $direction, array &$summary): void
     {
@@ -94,8 +95,22 @@ class KsefInvoiceImporter
             $summary[$direction === InvoiceDirection::Sales ? 'sales' : 'purchases']++;
         } catch (Throwable $exception) {
             report($exception);
-            $summary['failed'][] = $ksefNumber;
+            $summary['failed'][$ksefNumber] = self::reason($exception);
         }
+    }
+
+    /**
+     * Krótki powód błędu dla użytkownika (bez treści zapytań SQL).
+     */
+    public static function reason(Throwable $exception): string
+    {
+        $message = trim(strtok($exception->getMessage(), PHP_EOL) ?: '');
+
+        if ($exception instanceof QueryException) {
+            $message = (string) preg_replace('/\s*\(Connection:.*$/s', '', $message);
+        }
+
+        return mb_substr(class_basename($exception).': '.$message, 0, 300);
     }
 
     public function store(string $xml, string $ksefNumber, InvoiceDirection $direction): Invoice

@@ -18,6 +18,7 @@ use App\Services\Ksef\Fa3InvoiceBuilder;
 use App\Services\Ksef\Fa3InvoiceReader;
 use App\Services\Ksef\Fa3Validator;
 use App\Services\Ksef\InvoiceQrCode;
+use App\Services\Ksef\KsefClient;
 use App\Services\Ksef\KsefInvoiceImporter;
 use App\Services\Ksef\KsefInvoiceSender;
 use Illuminate\Http\Client\Request;
@@ -451,4 +452,75 @@ test('a test KSeF invoice can be deleted and releases its settlement, a producti
         ->test('pages::invoices.show', ['invoice' => $production->fresh()])
         ->call('delete')
         ->assertForbidden();
+});
+
+test('downloads limited by KSeF are retried and failures come with a reason', function () {
+    app()->afterResolving(KsefClient::class, fn ($client) => $client->rateLimitSleep = false);
+
+    $xml = file_get_contents(base_path('tests/Fixtures/ksef/purchase-domestic.xml'));
+    $calls = 0;
+
+    // Pierwsze pobranie P-1 — limit KSeF (429), drugie — faktura; P-404 — brak dokumentu.
+    // Te atrapy rejestrujemy przed ogólną atrapą KSeF, żeby miały pierwszeństwo.
+    Http::fake([
+        '*/invoices/ksef/P-1' => function () use (&$calls, $xml) {
+            return ++$calls === 1
+                ? Http::response(['exception' => ['exceptionDescription' => 'Too many requests']], 429, ['Retry-After' => '1'])
+                : Http::response($xml, 200, ['Content-Type' => 'application/xml']);
+        },
+        '*/invoices/ksef/P-404' => Http::response('', 404),
+    ]);
+    fakeKsef(['Subject2' => [['ksefNumber' => 'P-1', 'invoiceNumber' => 'FV 1'], ['ksefNumber' => 'P-404', 'invoiceNumber' => 'FV 2']]]);
+
+    $summary = app(KsefInvoiceImporter::class)->import(now()->subMonth(), now());
+
+    expect($summary['purchases'])->toBe(1)
+        ->and($calls)->toBe(2)
+        ->and(array_keys($summary['failed']))->toBe(['P-404'])
+        ->and($summary['failed']['P-404'])->toContain('HTTP 404');
+});
+
+test('invoices computed from gross prices are read with net values', function () {
+    $xml = str_replace(
+        ['<P_9A>12.5</P_9A><P_11>1250</P_11>', '<?xml'],
+        ['<P_9B>15.375</P_9B><P_11A>1537.5</P_11A><P_11Vat>287.5</P_11Vat>', "\u{FEFF}<?xml"],
+        file_get_contents(base_path('tests/Fixtures/ksef/purchase-domestic.xml')),
+    );
+
+    $item = app(Fa3InvoiceReader::class)->read($xml)['items'][0];
+
+    expect($item['net'])->toBe('1250.00');
+});
+
+test('invoices from the production KSeF cannot be deleted', function () {
+    KsefSetting::query()->update(['environment' => 'prod']);
+
+    $fromKsef = Invoice::factory()->purchase()->create(['source' => InvoiceSource::Ksef, 'ksef_number' => 'P-9', 'ksef_environment' => 'prod', 'status' => InvoiceStatus::Issued]);
+    $manual = Invoice::factory()->purchase()->create(['source' => InvoiceSource::Manual, 'status' => InvoiceStatus::Issued]);
+
+    expect($fromKsef->isDeletable())->toBeFalse()
+        ->and($manual->isDeletable())->toBeTrue();
+
+    Livewire::actingAs($this->admin)
+        ->test('pages::invoices.show', ['invoice' => $fromKsef])
+        ->assertDontSee('Delete this invoice?')
+        ->call('delete')
+        ->assertForbidden();
+});
+
+test('an invoice from KSeF shows the totals of its XML even when the lines are gross', function () {
+    $xml = str_replace(
+        '<P_9A>12.5</P_9A><P_11>1250</P_11>',
+        '<P_9B>15.375</P_9B><P_11A>1537.5</P_11A>',
+        file_get_contents(base_path('tests/Fixtures/ksef/purchase-domestic.xml')),
+    );
+
+    $invoice = app(KsefInvoiceImporter::class)->store($xml, 'P-77', InvoiceDirection::Purchase);
+    $summary = $invoice->fresh()->summary();
+
+    expect((string) $summary->net())->toBe('1250.00')
+        ->and((string) $summary->vat())->toBe('287.50')
+        ->and((string) $summary->gross())->toBe('1537.50');
+
+    $this->actingAs($this->admin)->get(route('invoices.show', $invoice))->assertSee('1 537,50 PLN');
 });

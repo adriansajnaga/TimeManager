@@ -25,6 +25,12 @@ class Fa3InvoiceReader
      */
     public function read(string $xml): array
     {
+        // Znacznik BOM przed deklaracją XML psuje parser.
+        $xml = ltrim($xml);
+
+        if (str_starts_with($xml, "\u{FEFF}")) {
+            $xml = substr($xml, strlen("\u{FEFF}"));
+        }
         $document = new SimpleXMLElement($xml);
         $namespace = $document->getDocNamespaces()[''] ?? Fa3InvoiceBuilder::NAMESPACE;
         $document->registerXPathNamespace('fa', $namespace);
@@ -122,6 +128,16 @@ class Fa3InvoiceReader
             $lineNet = $value($kind === InvoiceKind::Advance ? 'fa:P_11NettoZ' : 'fa:P_11', $row);
             $unitPrice = $value('fa:P_9A'.$suffix, $row);
 
+            // Faktury liczone „od brutto” (P_9B, P_11A): netto = brutto − VAT wiersza, gdy jest podany.
+            if ($lineNet === null && ($lineGross = $value('fa:P_11A', $row)) !== null) {
+                $lineVat = $value('fa:P_11Vat', $row);
+                $lineNet = (string) $this->decimal($lineGross)->minus($this->decimal($lineVat ?? '0'));
+            }
+
+            if ($unitPrice === null && $lineNet === null && ($grossPrice = $value('fa:P_9B', $row)) !== null) {
+                $unitPrice = $grossPrice;
+            }
+
             if ($unitPrice === null && $lineNet !== null) {
                 $unitPrice = (string) ($quantity->isZero() ? $this->decimal($lineNet) : $this->decimal($lineNet)->dividedBy($quantity, 2, RoundingMode::HalfUp));
             }
@@ -129,7 +145,7 @@ class Fa3InvoiceReader
             $items[] = [
                 'is_before' => $value('fa:StanPrzed'.$suffix, $row) === '1',
                 'name' => $value('fa:P_7'.$suffix, $row) ?? '—',
-                'unit' => $value('fa:P_8A'.$suffix, $row),
+                'unit' => ($unit = $value('fa:P_8A'.$suffix, $row)) !== null ? mb_substr($unit, 0, 20) : null,
                 'quantity' => (string) $quantity,
                 'unit_price' => (string) $this->decimal($unitPrice ?? '0')->toScale(2, RoundingMode::HalfUp),
                 'vat_code' => self::vatCode($value('fa:P_12'.$suffix, $row)),
@@ -154,6 +170,52 @@ class Fa3InvoiceReader
             'advance_ksef_numbers' => $advanceKsef,
             'advance_numbers' => $advanceNumbers,
         ];
+    }
+
+    /**
+     * Sumy dokumentu wg stawek z pól P_13_x / P_14_x (wiążące — tak jak w KSeF).
+     *
+     * @return array<string, array{net: string, vat: string}> klucz = wartość VatCode
+     */
+    public function totals(string $xml): array
+    {
+        $xml = ltrim($xml);
+
+        if (str_starts_with($xml, "\u{FEFF}")) {
+            $xml = substr($xml, strlen("\u{FEFF}"));
+        }
+
+        $document = new SimpleXMLElement($xml);
+        $document->registerXPathNamespace('fa', $document->getDocNamespaces()[''] ?? Fa3InvoiceBuilder::NAMESPACE);
+
+        $fields = [
+            '1' => VatCode::Rate23, '2' => VatCode::Rate8, '3' => VatCode::Rate5, '4' => VatCode::Rate5,
+            '5' => VatCode::OutsideScope, '6_1' => VatCode::ZeroDomestic, '6_2' => VatCode::ZeroIntraEu,
+            '6_3' => VatCode::ZeroExport, '7' => VatCode::Exempt, '8' => VatCode::OutsideScope,
+            '9' => VatCode::OutsideScopeEuServices, '10' => VatCode::ReverseCharge, '11' => VatCode::OutsideScope,
+        ];
+
+        $totals = [];
+
+        foreach ($fields as $suffix => $code) {
+            $net = $document->xpath('/fa:Faktura/fa:Fa/fa:P_13_'.$suffix);
+            $vat = $document->xpath('/fa:Faktura/fa:Fa/fa:P_14_'.$suffix);
+
+            if ($net === false || $net === null || $net === []) {
+                continue;
+            }
+
+            $current = $totals[$code->name] ?? ['net' => BigDecimal::zero(), 'vat' => BigDecimal::zero()];
+            $totals[$code->name] = [
+                'net' => $current['net']->plus($this->decimal((string) $net[0])),
+                'vat' => $current['vat']->plus($vat !== false && $vat !== null && $vat !== [] ? $this->decimal((string) $vat[0]) : BigDecimal::zero()),
+            ];
+        }
+
+        return array_map(fn (array $total) => [
+            'net' => (string) $total['net']->toScale(2, RoundingMode::HalfUp),
+            'vat' => (string) $total['vat']->toScale(2, RoundingMode::HalfUp),
+        ], $totals);
     }
 
     /**
