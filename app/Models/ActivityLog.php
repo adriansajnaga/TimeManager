@@ -25,6 +25,33 @@ class ActivityLog extends Model
 
     protected $table = 'activity_log';
 
+    private static bool $paused = false;
+
+    /**
+     * Wykonuje operację bez zapisu w dzienniku (np. import tysięcy rekordów, opisany jednym wpisem).
+     *
+     * @template TResult
+     *
+     * @param  callable(): TResult  $callback
+     * @return TResult
+     */
+    public static function withoutLogging(callable $callback): mixed
+    {
+        $previous = self::$paused;
+        self::$paused = true;
+
+        try {
+            return $callback();
+        } finally {
+            self::$paused = $previous;
+        }
+    }
+
+    public static function isPaused(): bool
+    {
+        return self::$paused;
+    }
+
     /**
      * Get the attributes that should be cast.
      *
@@ -40,8 +67,12 @@ class ActivityLog extends Model
     /**
      * @param  array<string, mixed>  $properties
      */
-    public static function record(Model $subject, string $event, array $properties = []): self
+    public static function record(Model $subject, string $event, array $properties = []): ?self
     {
+        if (self::$paused) {
+            return null;
+        }
+
         return static::create([
             'user_id' => Auth::id(),
             'subject_type' => $subject->getMorphClass(),

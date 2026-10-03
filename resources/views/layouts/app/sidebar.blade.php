@@ -57,6 +57,11 @@
                             <flux:sidebar.item icon="truck" :href="route('admin.vehicles')" :current="request()->routeIs('admin.vehicles')" wire:navigate>
                                 {{ __('Vehicles') }}
                             </flux:sidebar.item>
+                            @if (\App\Services\LegacyImport\LegacyImporter::isConfigured())
+                                <flux:sidebar.item icon="arrow-down-tray" :href="route('admin.legacy-import')" :current="request()->routeIs('admin.legacy-import')" wire:navigate>
+                                    {{ __('Import') }}
+                                </flux:sidebar.item>
+                            @endif
                         @endcan
                     </flux:sidebar.group>
                 @endcanany

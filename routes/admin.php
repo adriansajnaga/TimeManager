@@ -15,5 +15,6 @@ Route::middleware(['auth', 'verified'])->prefix('admin')->name('admin.')->group(
         Route::get('company/logo', CompanyLogoController::class)->name('company.logo');
         Route::livewire('bank-accounts', 'pages::admin.bank-accounts')->name('bank-accounts');
         Route::livewire('vehicles', 'pages::admin.vehicles')->name('vehicles');
+        Route::livewire('legacy-import', 'pages::admin.legacy-import')->name('legacy-import');
     });
 });

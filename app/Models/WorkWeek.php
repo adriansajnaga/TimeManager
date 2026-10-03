@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable $ends_on
  * @property CarbonImmutable|null $closed_at
  * @property int|null $closed_by
+ * @property CarbonImmutable|null $invoiced_at
  */
 #[Fillable(['iso_year', 'iso_week', 'year', 'month', 'starts_on', 'ends_on'])]
 class WorkWeek extends Model
@@ -45,6 +46,7 @@ class WorkWeek extends Model
             'starts_on' => 'date',
             'ends_on' => 'date',
             'closed_at' => 'datetime',
+            'invoiced_at' => 'datetime',
         ];
     }
 
@@ -102,6 +104,14 @@ class WorkWeek extends Model
             $this->starts_on->format('d.m'),
             $this->ends_on->format('d.m'),
         );
+    }
+
+    /**
+     * Zafakturowana (rozliczenie albo stara aplikacja) — nie wchodzi do kolejnego rozliczenia.
+     */
+    public function isInvoiced(): bool
+    {
+        return $this->invoiced_at !== null;
     }
 
     public function close(User $user): void
