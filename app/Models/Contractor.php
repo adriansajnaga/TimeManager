@@ -31,6 +31,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $tax_id
  * @property string|null $email
  * @property string|null $phone
+ * @property string|null $fax
+ * @property string|null $website
+ * @property string|null $logo_path
  * @property Language $document_language
  * @property InvoiceLanguage $invoice_language
  * @property string $currency
@@ -53,7 +56,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $legacy_id
  */
 #[Fillable([
-    'type', 'name', 'street', 'zip', 'city', 'country_code', 'vat_prefix', 'tax_id', 'email', 'phone',
+    'type', 'name', 'street', 'zip', 'city', 'country_code', 'vat_prefix', 'tax_id', 'email', 'phone', 'fax', 'website', 'logo_path',
     'document_language', 'invoice_language', 'currency', 'vat_code', 'invoice_line_mode',
     'invoice_description_template', 'payment_days', 'bank_account_id', 'package_documents',
     'hourly_rate', 'km_rate', 'base_address', 'vehicle_id',

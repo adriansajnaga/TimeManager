@@ -15,6 +15,14 @@
                     <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                         {{ __('Dashboard') }}
                     </flux:sidebar.item>
+                    @can('log-own-time')
+                        <flux:sidebar.item icon="clock" :href="route('time.week')" :current="request()->routeIs('time.*')" wire:navigate>
+                            {{ __('Working time') }}
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="calendar-days" :href="route('weeks.index')" :current="request()->routeIs('weeks.*')" wire:navigate>
+                            {{ __('Weeks') }}
+                        </flux:sidebar.item>
+                    @endcan
                 </flux:sidebar.group>
 
                 @canany(['manage-projects', 'manage-contractors'])

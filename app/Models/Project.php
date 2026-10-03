@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Permission;
 use App\Enums\ProjectBillingType;
 use App\Enums\ProjectStatus;
 use App\Models\Concerns\LogsActivity;
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * @property int $id
@@ -68,6 +70,20 @@ class Project extends Model
     }
 
     /**
+     * Projekty, na które użytkownik może wpisywać godziny: aktywne, a dla pracownika — przypisane.
+     *
+     * @param  Builder<Project>  $query
+     */
+    public function scopeAvailableFor(Builder $query, User $user): void
+    {
+        $query->active();
+
+        if (! $user->hasPermission(Permission::ViewAllTimeEntries)) {
+            $query->whereHas('users', fn (Builder $users) => $users->whereKey($user->id));
+        }
+    }
+
+    /**
      * Numer i nazwa jak na Montageauftrag: „160406010 - Zuleitung Dampf Luftbefeuchter”.
      */
     public function fullName(): string
@@ -89,6 +105,22 @@ class Project extends Model
     public function contractor(): BelongsTo
     {
         return $this->belongsTo(Contractor::class);
+    }
+
+    /**
+     * @return HasMany<TimeEntry, $this>
+     */
+    public function timeEntries(): HasMany
+    {
+        return $this->hasMany(TimeEntry::class);
+    }
+
+    /**
+     * @return HasMany<WeeklyReport, $this>
+     */
+    public function weeklyReports(): HasMany
+    {
+        return $this->hasMany(WeeklyReport::class);
     }
 
     /**

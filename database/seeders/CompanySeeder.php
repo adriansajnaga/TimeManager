@@ -29,6 +29,7 @@ class CompanySeeder extends Seeder
             'issue_place' => 'Toruń',
             'default_payment_days' => 14,
             'default_vat_code' => VatCode::Rate23,
+            'logo_path' => SeederAssets::store('ascomm-logo.png', 'company/logo.png'),
         ]);
 
         BankAccount::query()->updateOrCreate(['label' => 'REVOLT21'], [

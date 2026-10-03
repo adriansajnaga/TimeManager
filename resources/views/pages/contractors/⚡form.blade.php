@@ -12,11 +12,19 @@ use App\Models\Contractor;
 use App\Models\Vehicle;
 use Flux\Flux;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Livewire\WithFileUploads;
 
 new class extends Component {
+    use WithFileUploads;
+
     public ContractorForm $form;
+
+    /** Logo do nagłówka dokumentów klienta (np. Stundennachweis). */
+    public ?TemporaryUploadedFile $logo = null;
 
     public function mount(?Contractor $contractor = null): void
     {
@@ -26,9 +34,21 @@ new class extends Component {
     public function save(): void
     {
         $this->authorize('manage-contractors');
+        $this->validate(['logo' => ['nullable', 'image', 'mimes:png,jpg,jpeg', 'max:2048']]);
 
         $creating = $this->form->contractor === null;
         $contractor = $this->form->save();
+
+        if ($this->logo !== null) {
+            if ($contractor->logo_path !== null) {
+                Storage::disk('local')->delete($contractor->logo_path);
+            }
+
+            $contractor->update([
+                'logo_path' => $this->logo->storeAs('contractors', $contractor->id.'-logo.'.$this->logo->extension(), 'local'),
+            ]);
+            $this->logo = null;
+        }
 
         Flux::toast(variant: 'success', text: __('Contractor saved.'));
 
@@ -119,6 +139,24 @@ new class extends Component {
 
                 <flux:input wire:model="form.email" :label="__('Email')" type="email" />
                 <flux:input wire:model="form.phone" :label="__('Phone')" />
+                <flux:input wire:model="form.fax" :label="__('Fax')" />
+                <flux:input wire:model="form.website" :label="__('Website')" />
+            </div>
+
+            <div class="flex flex-wrap items-end gap-6">
+                @if ($logo)
+                    <img src="{{ $logo->temporaryUrl() }}" alt="{{ __('Logo') }}" class="h-14 rounded bg-white p-1" />
+                @elseif ($form->contractor?->logo_path)
+                    <img src="{{ route('contractors.logo', $form->contractor) }}" alt="{{ __('Logo') }}" class="h-14 rounded bg-white p-1" />
+                @endif
+
+                <flux:input
+                    type="file"
+                    wire:model="logo"
+                    :label="__('Client logo (PNG or JPG, max 2 MB)')"
+                    :description="__('Shown on the client\'s own forms, e.g. the weekly time record.')"
+                    accept="image/png,image/jpeg"
+                />
             </div>
         </flux:card>
 

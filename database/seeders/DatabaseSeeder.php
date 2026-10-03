@@ -6,13 +6,10 @@ use App\Enums\Language;
 use App\Enums\Role;
 use App\Models\Project;
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
     /**
      * Seed the application's database (tylko lokalnie — na serwerze seedery nie są uruchamiane).
      *
@@ -37,6 +34,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             CompanySeeder::class,
             GaertnerSeeder::class,
+            ReferencePackageSeeder::class,
         ]);
 
         // Pracownik przypisany do dwóch projektów — do sprawdzania uprawnień.

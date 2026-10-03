@@ -38,6 +38,10 @@ class ContractorForm extends Form
 
     public string $phone = '';
 
+    public string $fax = '';
+
+    public string $website = '';
+
     public string $document_language = 'pl';
 
     public string $invoice_language = 'pl';
@@ -112,6 +116,8 @@ class ContractorForm extends Form
             'tax_id' => (string) $contractor->tax_id,
             'email' => (string) $contractor->email,
             'phone' => (string) $contractor->phone,
+            'fax' => (string) $contractor->fax,
+            'website' => (string) $contractor->website,
             'document_language' => $contractor->document_language->value,
             'invoice_language' => $contractor->invoice_language->value,
             'currency' => $contractor->currency,
@@ -178,6 +184,8 @@ class ContractorForm extends Form
             'tax_id' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
+            'fax' => ['nullable', 'string', 'max:50'],
+            'website' => ['nullable', 'string', 'max:255'],
             'document_language' => ['required', Rule::enum(Language::class)],
             'invoice_language' => ['required', Rule::enum(InvoiceLanguage::class)],
             'currency' => ['required', 'string', 'size:3', 'alpha'],
@@ -218,6 +226,8 @@ class ContractorForm extends Form
             'tax_id' => $this->nullable(preg_replace('/\s+/', '', $this->tax_id)),
             'email' => $this->nullable($this->email),
             'phone' => $this->nullable($this->phone),
+            'fax' => $this->nullable($this->fax),
+            'website' => $this->nullable($this->website),
             'document_language' => $this->document_language,
             'invoice_language' => $this->invoice_language,
             'currency' => strtoupper($this->currency),

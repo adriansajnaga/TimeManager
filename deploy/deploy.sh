@@ -11,7 +11,7 @@ fail() { echo "[deploy] BŁĄD: $*" >&2; exit 1; }
 
 # --- PHP: preferowana wersja >= 8.4.1 ze wszystkimi rozszerzeniami ----------
 log "Szukam wersji PHP"
-REQUIRED_EXT="ctype curl dom fileinfo filter hash mbstring openssl pdo_mysql session tokenizer xml"
+REQUIRED_EXT="ctype curl dom fileinfo filter gd hash mbstring openssl pdo_mysql session tokenizer xml"
 PHP=""
 FALLBACK=""
 for candidate in \
@@ -51,13 +51,15 @@ missing=""
 for ext in $REQUIRED_EXT; do
     "$PHP" -r "exit(extension_loaded('$ext') ? 0 : 1);" || missing="$missing $ext"
 done
-# fileinfo jest potrzebne stronie (wykrywanie typów plików), nie linii komend.
+# fileinfo (typy plików) i gd (obrazy w PDF) są potrzebne stronie, nie linii komend.
 COMPOSER_IGNORE=""
-if [[ " $missing " == *" fileinfo "* ]]; then
-    log "UWAGA: brak fileinfo w PHP CLI. Musi być włączone w PHP dla strony."
-    missing="${missing/ fileinfo/}"
-    COMPOSER_IGNORE="--ignore-platform-req=ext-fileinfo"
-fi
+for ext in fileinfo gd; do
+    if [[ " $missing " == *" $ext "* ]]; then
+        log "UWAGA: brak $ext w PHP CLI. Musi być włączone w PHP dla strony."
+        missing="${missing/ $ext/}"
+        COMPOSER_IGNORE="$COMPOSER_IGNORE --ignore-platform-req=ext-$ext"
+    fi
+done
 [ -z "$missing" ] || fail "Brak rozszerzeń PHP:$missing. Poproś hosting o ich włączenie."
 
 # --- Composer: własna, aktualna kopia (systemowy bywa za stary) -------------

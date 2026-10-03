@@ -11,6 +11,7 @@ enum Permission: string
     case ManageUsers = 'manage-users';
     case ManageContractors = 'manage-contractors';
     case ManageProjects = 'manage-projects';
+    case CloseWeeks = 'close-weeks';
     case ManageSettlements = 'manage-settlements';
     case ManageInvoices = 'manage-invoices';
     case ViewAllTimeEntries = 'view-all-time-entries';
