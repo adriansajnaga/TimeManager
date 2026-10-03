@@ -8,6 +8,8 @@ use App\Documents\SettlementPackage;
 use App\Models\Invoice;
 use App\Services\Ksef\InvoiceQrCode;
 use Illuminate\Http\Response;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\HeaderUtils;
 
 /**
  * PDF faktury sprzedaży (szkic z dopiskiem „Projekt”).
@@ -35,7 +37,8 @@ class InvoiceController extends Controller
 
         return response($renderer->render($package->documents($invoice), $invoice->displayNumber()), 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="'.$package->filename($invoice).'"',
+            // „zusammengefügt” — nazwa UTF-8 z zapasową wersją ASCII dla starszych programów.
+            'Content-Disposition' => HeaderUtils::makeDisposition(HeaderUtils::DISPOSITION_INLINE, $package->filename($invoice), Str::ascii($package->filename($invoice))),
         ]);
     }
 

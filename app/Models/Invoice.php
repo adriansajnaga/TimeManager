@@ -296,6 +296,15 @@ class Invoice extends Model
         return $this->isSales() ? $this->isDraft() : $this->status !== InvoiceStatus::Cancelled;
     }
 
+    /**
+     * Usunąć można szkic, zakup i fakturę ze środowiska testowego KSeF (bez mocy prawnej);
+     * faktury z produkcyjnego KSeF poprawia się korektą.
+     */
+    public function isDeletable(): bool
+    {
+        return ! $this->isSales() || $this->isDraft() || $this->isFromTestKsef();
+    }
+
     public function isInKsef(): bool
     {
         return filled($this->ksef_number);

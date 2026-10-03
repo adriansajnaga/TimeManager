@@ -42,7 +42,7 @@ test('the e-mail is prepared from the client templates and sent only on demand',
         ->call('prepareEmail')
         ->assertSet('mailTo', '160_rechnungen_gaertner@handwerksgruppe.de')
         ->assertSet('mailSubject', 'Rechnung 4/9/2026')
-        ->assertSet('mailAttachment', 'Paket_4-9-2026.pdf');
+        ->assertSet('mailAttachment', '2026_9_4 ASCOMM-zusammengefügt.pdf');
 
     expect($page->get('mailBody'))->toContain('anbei erhalten Sie Ihre Rechnung Nr. 4/9/2026 vom 01.09.2026.')
         ->toContain('Adrian Sajnaga');
@@ -64,7 +64,7 @@ test('the e-mail is prepared from the client templates and sent only on demand',
 
     expect($log->sent_at)->not->toBeNull()
         ->and($log->to)->toBe(['160_rechnungen_gaertner@handwerksgruppe.de'])
-        ->and($log->attachment)->toBe('Paket_4-9-2026.pdf')
+        ->and($log->attachment)->toBe('2026_9_4 ASCOMM-zusammengefügt.pdf')
         ->and($log->sent_by)->toBe($this->admin->id)
         ->and($this->invoice->fresh()->emailed_at)->not->toBeNull();
 });

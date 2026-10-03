@@ -48,9 +48,17 @@ final class SettlementPackage
         return $documents;
     }
 
+    /**
+     * „2026_8_4 ASCOMM-zusammengefügt.pdf” dla faktury 4/8/2026 (rok_miesiąc_numer, jak dotąd).
+     */
     public function filename(Invoice $invoice): string
     {
-        return 'Paket_'.str_replace(['/', ' '], ['-', '_'], (string) ($invoice->number ?? 'draft-'.$invoice->id)).'.pdf';
+        $number = (string) $invoice->number;
+        $prefix = preg_match('#^(\d+)/(\d{1,2})/(\d{4})$#', $number, $parts) === 1
+            ? $parts[3].'_'.$parts[2].'_'.$parts[1]
+            : ($number !== '' ? (string) preg_replace('#[^0-9A-Za-z_-]+#', '_', $number) : 'draft_'.$invoice->id);
+
+        return $prefix.' ASCOMM-zusammengefügt.pdf';
     }
 
     /**

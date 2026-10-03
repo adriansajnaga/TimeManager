@@ -36,7 +36,7 @@ new class extends Component {
     public function delete(): void
     {
         $this->authorize('manage-invoices');
-        abort_unless($this->invoice->isSales() ? $this->invoice->isDraft() : true, 403);
+        abort_unless($this->invoice->isDeletable(), 403);
 
         $direction = $this->invoice->direction;
         $this->invoice->delete();
@@ -258,9 +258,12 @@ new class extends Component {
                         <flux:menu.item icon="no-symbol" wire:click="cancel" wire:confirm="{{ __('Cancel this pro forma?') }}">{{ __('Cancel') }}</flux:menu.item>
                     @endif
 
-                    @if (! $invoice->isSales() || $invoice->isDraft())
+                    @if ($invoice->isDeletable())
                         <flux:menu.separator />
-                        <flux:menu.item icon="trash" variant="danger" wire:click="delete" wire:confirm="{{ __('Delete this invoice?') }}">{{ __('Delete') }}</flux:menu.item>
+                        <flux:menu.item icon="trash" variant="danger" wire:click="delete"
+                            wire:confirm="{{ $invoice->isFromTestKsef() ? __('Delete this test invoice? It has no legal effect; the weeks of its settlement can be settled again.') : __('Delete this invoice?') }}">
+                            {{ $invoice->isFromTestKsef() ? __('Delete test invoice') : __('Delete') }}
+                        </flux:menu.item>
                     @endif
                 </flux:menu>
             </flux:dropdown>

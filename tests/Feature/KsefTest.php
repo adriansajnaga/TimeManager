@@ -429,3 +429,26 @@ test('an invoice in KSeF links to the KSeF verification page', function () {
         ->assertSee('Check in KSeF')
         ->assertSee('https://qr-test.ksef.mf.gov.pl/invoice/8792451081/15-09-2026/', false);
 });
+
+test('a test KSeF invoice can be deleted and releases its settlement, a production one cannot', function () {
+    $invoice = draftInvoice($this->client, [['100.00', '1', VatCode::Rate23]], ['number' => '1/9/2026', 'status' => InvoiceStatus::Issued]);
+    $invoice->forceFill(['ksef_number' => 'T-1', 'ksef_status' => KsefStatus::Accepted, 'ksef_environment' => 'test'])->save();
+
+    expect($invoice->fresh()->isDeletable())->toBeTrue();
+
+    Livewire::actingAs($this->admin)
+        ->test('pages::invoices.show', ['invoice' => $invoice])
+        ->assertSee('Delete test invoice')
+        ->call('delete');
+
+    expect(Invoice::query()->find($invoice->id))->toBeNull();
+
+    $production = draftInvoice($this->client, [['100.00', '1', VatCode::Rate23]], ['number' => '2/9/2026', 'status' => InvoiceStatus::Issued]);
+    $production->forceFill(['ksef_number' => 'P-1', 'ksef_status' => KsefStatus::Accepted, 'ksef_environment' => 'prod'])->save();
+    KsefSetting::query()->update(['environment' => 'prod']);
+
+    Livewire::actingAs($this->admin)
+        ->test('pages::invoices.show', ['invoice' => $production->fresh()])
+        ->call('delete')
+        ->assertForbidden();
+});

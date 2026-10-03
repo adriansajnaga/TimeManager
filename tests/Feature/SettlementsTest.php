@@ -190,3 +190,15 @@ test('only users who manage settlements open settlements', function () {
     $this->actingAs(User::factory()->create())->get(route('settlements.index'))->assertForbidden();
     $this->actingAs($this->admin)->get(route('settlements.index'))->assertOk()->assertSee('Gärtner Elektrotechnik GmbH');
 });
+
+test('the package file is named after the invoice number', function () {
+    $invoice = app(SettlementService::class)->createInvoice($this->gaertner, $this->weeks, $this->admin)->invoice;
+    $invoice->forceFill(['number' => '4/8/2026'])->save();
+
+    expect(app(SettlementPackage::class)->filename($invoice))->toBe('2026_8_4 ASCOMM-zusammengefügt.pdf');
+
+    $this->actingAs($this->admin)
+        ->get(route('invoices.package', $invoice))
+        ->assertOk()
+        ->assertHeader('Content-Disposition', "inline; filename=\"2026_8_4 ASCOMM-zusammengefugt.pdf\"; filename*=utf-8''2026_8_4%20ASCOMM-zusammengef%C3%BCgt.pdf");
+});
