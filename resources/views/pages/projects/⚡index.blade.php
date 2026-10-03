@@ -47,7 +47,7 @@ new #[Title('Projects')] class extends Component {
             }))
             ->when($this->contractor !== '', fn ($query) => $query->where('contractor_id', $this->contractor))
             ->when($this->status !== '', fn ($query) => $query->where('status', $this->status))
-            ->orderByDesc('number')
+            ->latest('id')
             ->paginate(25);
     }
 

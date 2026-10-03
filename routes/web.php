@@ -4,6 +4,7 @@ use App\Http\Controllers\ContractorLogoController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\MailboxController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route('dashboard'))->name('home');
@@ -43,7 +44,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::middleware('can:use-mailbox')->group(function () {
         Route::livewire('mailbox', 'pages::mailbox.index')->name('mailbox.index');
-        Route::livewire('mailbox/message', 'pages::mailbox.show')->name('mailbox.show');
+        Route::get('mailbox/message', fn (Request $request) => redirect()->route('mailbox.index', $request->only('folder', 'uid')))->name('mailbox.show');
         Route::get('mailbox/attachment', [MailboxController::class, 'attachment'])->name('mailbox.attachment');
     });
 

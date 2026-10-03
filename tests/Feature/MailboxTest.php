@@ -7,6 +7,7 @@ use App\Services\Mailbox\MailAttachment;
 use App\Services\Mailbox\Mailbox;
 use App\Services\Mailbox\MailboxException;
 use App\Services\Mailbox\MailFolder;
+use App\Services\Mailbox\MailHeader;
 use App\Services\Mailbox\MailMessage;
 use App\Services\Mailbox\MailSummary;
 use App\Services\Mailbox\MailView;
@@ -20,13 +21,31 @@ function fakeMailbox(?string $failWith = null): object
 {
     $fake = new class($failWith) implements Mailbox
     {
+        /** @var list<array{string, int, bool}> */
+        public array $seenCalls = [];
+
+        /** @var list<array{string, int}> */
+        public array $deleted = [];
+
         public function __construct(private readonly ?string $failWith) {}
+
+        public function setSeen(string $folder, int $uid, bool $seen): void
+        {
+            $this->seenCalls[] = [$folder, $uid, $seen];
+        }
+
+        public function delete(string $folder, int $uid): bool
+        {
+            $this->deleted[] = [$folder, $uid];
+
+            return ! MailFolder::looksLikeTrash($folder);
+        }
 
         public function folders(): array
         {
             $this->failIfNeeded();
 
-            return [new MailFolder('INBOX', 'INBOX'), new MailFolder('INBOX.Sent', 'Sent')];
+            return [new MailFolder('INBOX', 'Inbox', 1), new MailFolder('INBOX.Sent', 'Sent', 0), new MailFolder('INBOX.Trash', 'Trash', 0, true)];
         }
 
         public function messages(string $folder, int $page, int $perPage, string $search = ''): array
@@ -105,13 +124,16 @@ test('the mailbox lists folders and messages, newest first', function () {
         ->assertSee('No messages.');
 });
 
-test('a message is shown in a sandboxed frame without scripts and remote images', function () {
+test('a message opens next to the list in a sandboxed frame without scripts and remote images', function () {
     fakeMailbox();
 
     $page = Livewire::actingAs($this->admin)
-        ->test('pages::mailbox.show', ['folder' => 'INBOX', 'uid' => 12])
-        ->assertSee('Zahlungsavis 4/8/2026')
-        ->assertSee('Avis.pdf (2 kB)')
+        ->test('pages::mailbox.index')
+        ->assertSee('Select a message to read it.')
+        ->call('open', 12)
+        ->assertSee('Zahlung')
+        ->assertSee('Avis.pdf')
+        ->assertSee('PDF · 2 kB')
         ->assertSee('sandbox="allow-popups allow-popups-to-escape-sandbox"', false)
         ->assertSee('Show images');
 
@@ -122,6 +144,49 @@ test('a message is shown in a sandboxed frame without scripts and remote images'
         ->and(MailView::document(app(Mailbox::class)->message('INBOX', 12), remoteImages: true))->toContain('img-src data: cid: https: http:');
 
     $page->call('showImages')->assertDontSee('Show images');
+});
+
+test('messages can be marked unread and deleted to the trash', function () {
+    $fake = fakeMailbox();
+
+    Livewire::actingAs($this->admin)
+        ->test('pages::mailbox.index', ['uid' => 12])
+        ->call('toggleSeen', 12, false)
+        ->assertSet('uid', 0)
+        ->call('delete', 11)
+        ->call('openFolder', 'INBOX.Trash')
+        ->call('delete', 5);
+
+    expect($fake->seenCalls)->toBe([['INBOX', 12, false]])
+        ->and($fake->deleted)->toBe([['INBOX', 11], ['INBOX.Trash', 5]]);
+});
+
+test('encoded mail headers are decoded, also when a character is split between words', function () {
+    expect(MailHeader::decode('=?UTF-8?Q?Fwd=3A_Sajanga_pe=C5=82n?='))->toBe('Fwd: Sajanga pełn')
+        ->and(MailHeader::decode('=?UTF-8?Q?Fwd=3A_Sajanga_pe=C5?=
+ =?UTF-8?Q?=82nomocnictwo?='))->toBe('Fwd: Sajanga pełnomocnictwo')
+        ->and(MailHeader::decode('=?iso-8859-2?Q?Zam=F3wienie_nr_5?='))->toBe('Zamówienie nr 5')
+        ->and(MailHeader::decode('=?UTF-8?B?R8OkcnRuZXIgRWxla3Ryb3RlY2huaWs=?= <a@b.de>'))->toBe('Gärtner Elektrotechnik <a@b.de>')
+        ->and(MailHeader::decode('Re: =?utf-8?q?Za=C5=BC=C3=B3=C5=82=C4=87?= test'))->toBe('Re: Zażółć test')
+        ->and(MailHeader::field('From: a@b
+Subject: =?UTF-8?Q?Faktura_?=
+ =?UTF-8?Q?4/8/2026?=
+To: x', 'Subject'))->toBe('Faktura 4/8/2026');
+});
+
+test('attachments get an icon by type and PDFs open in the browser', function () {
+    expect((new MailAttachment(0, 'Faktura.pdf', 'application/octet-stream', 1))->icon()[0])->toBe('document-text')
+        ->and((new MailAttachment(0, 'Oferta.docx', 'application/octet-stream', 1))->kind())->toBe('word')
+        ->and((new MailAttachment(0, 'Lista.xlsx', 'application/octet-stream', 1))->kind())->toBe('excel')
+        ->and((new MailAttachment(0, 'Zdjęcie.JPG', 'image/jpeg', 1))->previewable())->toBeTrue()
+        ->and((new MailAttachment(0, 'Makro.docm', 'application/octet-stream', 1))->previewable())->toBeFalse();
+
+    fakeMailbox();
+
+    $this->actingAs($this->admin)
+        ->get(route('mailbox.attachment', ['folder' => 'INBOX', 'uid' => 12, 'index' => 0, 'inline' => 1]))
+        ->assertOk()
+        ->assertHeader('Content-Type', 'application/pdf');
 });
 
 test('attachments are downloaded, never rendered inline', function () {

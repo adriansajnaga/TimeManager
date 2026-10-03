@@ -3,7 +3,7 @@
 namespace App\Services\Mailbox;
 
 /**
- * Skrzynka firmowa do przeglądania (tylko odczyt).
+ * Skrzynka firmowa: przeglądanie, oznaczanie przeczytanych i usuwanie do Kosza.
  */
 interface Mailbox
 {
@@ -34,6 +34,20 @@ interface Mailbox
      * @throws MailboxException
      */
     public function attachment(string $folder, int $uid, int $index): MailAttachment;
+
+    /**
+     * Oznacza wiadomość jako przeczytaną albo nieprzeczytaną.
+     *
+     * @throws MailboxException
+     */
+    public function setSeen(string $folder, int $uid, bool $seen): void;
+
+    /**
+     * Przenosi do Kosza (true) albo — w Koszu lub bez Kosza — usuwa na stałe (false).
+     *
+     * @throws MailboxException
+     */
+    public function delete(string $folder, int $uid): bool;
 
     /**
      * Sprawdza logowanie (test połączenia).

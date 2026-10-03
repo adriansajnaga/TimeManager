@@ -3,14 +3,17 @@
 use App\Services\Mailbox\MailFolder;
 use App\Services\Mailbox\Mailbox;
 use App\Services\Mailbox\MailboxException;
+use App\Services\Mailbox\MailMessage;
 use App\Services\Mailbox\MailSummary;
+use App\Services\Mailbox\MailView;
+use Flux\Flux;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
 new #[Title('Mailbox')] class extends Component {
-    private const PER_PAGE = 25;
+    private const PER_PAGE = 30;
 
     #[Url(except: 'INBOX')]
     public string $folder = 'INBOX';
@@ -21,11 +24,20 @@ new #[Title('Mailbox')] class extends Component {
     #[Url(except: '')]
     public string $search = '';
 
+    /** Otwarta wiadomość (UID w folderze). */
+    #[Url(except: 0)]
+    public int $uid = 0;
+
+    public bool $remoteImages = false;
+
     public ?string $error = null;
+
+    public ?string $messageError = null;
 
     public function updatedSearch(): void
     {
         $this->page = 1;
+        $this->uid = 0;
     }
 
     public function openFolder(string $path): void
@@ -33,11 +45,73 @@ new #[Title('Mailbox')] class extends Component {
         $this->folder = $path;
         $this->page = 1;
         $this->search = '';
+        $this->uid = 0;
+    }
+
+    public function open(int $uid): void
+    {
+        $this->uid = $uid;
+        $this->remoteImages = false;
+        unset($this->messages, $this->folders);
+    }
+
+    public function close(): void
+    {
+        $this->uid = 0;
     }
 
     public function goTo(int $page): void
     {
         $this->page = max(1, $page);
+    }
+
+    public function refresh(): void
+    {
+        unset($this->messages, $this->folders);
+    }
+
+    public function showImages(): void
+    {
+        $this->remoteImages = true;
+    }
+
+    public function toggleSeen(int $uid, bool $seen): void
+    {
+        $this->authorize('use-mailbox');
+
+        try {
+            app(Mailbox::class)->setSeen($this->folder, $uid, $seen);
+        } catch (MailboxException $exception) {
+            Flux::toast(variant: 'danger', text: $exception->getMessage());
+
+            return;
+        }
+
+        if (! $seen && $this->uid === $uid) {
+            $this->uid = 0;
+        }
+
+        unset($this->messages, $this->folders);
+    }
+
+    public function delete(int $uid): void
+    {
+        $this->authorize('use-mailbox');
+
+        try {
+            $toTrash = app(Mailbox::class)->delete($this->folder, $uid);
+        } catch (MailboxException $exception) {
+            Flux::toast(variant: 'danger', text: $exception->getMessage());
+
+            return;
+        }
+
+        if ($this->uid === $uid) {
+            $this->uid = 0;
+        }
+
+        unset($this->messages, $this->folders);
+        Flux::toast(text: $toTrash ? __('Moved to Trash.') : __('Message deleted.'));
     }
 
     /**
@@ -53,6 +127,17 @@ new #[Title('Mailbox')] class extends Component {
 
             return [];
         }
+    }
+
+    public function currentFolder(): ?MailFolder
+    {
+        foreach ($this->folders as $item) {
+            if ($item->path === $this->folder) {
+                return $item;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -74,24 +159,45 @@ new #[Title('Mailbox')] class extends Component {
         }
     }
 
+    #[Computed]
+    public function message(): ?MailMessage
+    {
+        if ($this->uid === 0) {
+            return null;
+        }
+
+        try {
+            return app(Mailbox::class)->message($this->folder, $this->uid);
+        } catch (MailboxException $exception) {
+            $this->messageError = $exception->getMessage();
+
+            return null;
+        }
+    }
+
     public function lastPage(): int
     {
         return max(1, (int) ceil($this->messages['total'] / self::PER_PAGE));
     }
 }; ?>
 
-<section class="w-full space-y-6">
-    <div class="flex flex-wrap items-center justify-between gap-4">
-        <div>
-            <flux:heading size="xl" level="1">{{ __('Mailbox') }}</flux:heading>
-            <flux:subheading>{{ __('Company mailbox (read only). Messages stay on the mail server.') }}</flux:subheading>
+@php
+    // Najpierw wiadomość (oznacza ją jako przeczytaną), potem lista i foldery z licznikami.
+    $message = $this->message;
+    $folders = $this->folders;
+    $result = $this->messages;
+    $inTrash = $this->currentFolder()?->isTrash ?? false;
+@endphp
+
+<section class="flex h-[calc(100vh-4rem)] w-full flex-col gap-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <flux:heading size="xl" level="1">{{ __('Mailbox') }}</flux:heading>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <flux:input wire:model.live.debounce.400ms="search" icon="magnifying-glass" :placeholder="__('Search in subject and sender')" class="max-w-xs" />
+            <flux:button icon="arrow-path" wire:click="refresh" :aria-label="__('Refresh')" />
         </div>
-
-        <flux:input wire:model.live.debounce.400ms="search" icon="magnifying-glass" :placeholder="__('Search in subject and sender')" class="max-w-xs" />
     </div>
-
-    @php($folders = $this->folders)
-    @php($result = $this->messages)
 
     @if ($this->error)
         <flux:callout icon="exclamation-triangle" color="red" :heading="__('Cannot open the mailbox')">
@@ -101,52 +207,125 @@ new #[Title('Mailbox')] class extends Component {
             @endcan
         </flux:callout>
     @else
-        <div class="grid gap-6 lg:grid-cols-[14rem_1fr]">
-            <nav class="space-y-1">
+        <div class="grid min-h-0 flex-1 gap-4 lg:grid-cols-[12rem_22rem_1fr]">
+            {{-- Foldery --}}
+            <nav class="space-y-1 overflow-y-auto">
                 @foreach ($folders as $item)
                     <button type="button" wire:click="openFolder(@js($item->path))"
-                        @class(['block w-full truncate rounded px-3 py-1.5 text-start text-sm', 'bg-zinc-200 font-semibold dark:bg-zinc-700' => $item->path === $folder, 'hover:bg-zinc-100 dark:hover:bg-zinc-800' => $item->path !== $folder])>
-                        {{ $item->name }}
+                        @class(['flex w-full items-center justify-between gap-2 rounded px-3 py-1.5 text-start text-sm', 'bg-zinc-200 font-semibold dark:bg-zinc-700' => $item->path === $folder, 'hover:bg-zinc-100 dark:hover:bg-zinc-800' => $item->path !== $folder])>
+                        <span class="truncate">{{ $item->name }}</span>
+                        @if ($item->unseen)
+                            <flux:badge size="sm" color="blue">{{ $item->unseen }}</flux:badge>
+                        @endif
                     </button>
                 @endforeach
             </nav>
 
-            <div class="space-y-3">
-                <flux:table>
-                    <flux:table.columns>
-                        <flux:table.column>{{ __('From') }}</flux:table.column>
-                        <flux:table.column>{{ __('Subject') }}</flux:table.column>
-                        <flux:table.column align="end">{{ __('Date') }}</flux:table.column>
-                    </flux:table.columns>
-                    <flux:table.rows>
-                        @forelse ($result['messages'] as $message)
-                            <flux:table.row :key="'msg-'.$message->uid">
-                                <flux:table.cell @class(['font-semibold' => ! $message->seen])>
-                                    <span class="block max-w-56 truncate">{{ $message->from }}</span>
-                                </flux:table.cell>
-                                <flux:table.cell @class(['font-semibold' => ! $message->seen])>
-                                    <flux:link :href="route('mailbox.show', ['folder' => $folder, 'uid' => $message->uid])" wire:navigate>
-                                        {{ $message->subject !== '' ? $message->subject : __('(no subject)') }}
-                                    </flux:link>
-                                    @if ($message->hasAttachments)
-                                        <flux:icon.paper-clip variant="micro" class="inline text-zinc-400" />
-                                    @endif
-                                </flux:table.cell>
-                                <flux:table.cell align="end" class="whitespace-nowrap">{{ $message->date?->format('d.m.Y H:i') }}</flux:table.cell>
-                            </flux:table.row>
-                        @empty
-                            <flux:table.row>
-                                <flux:table.cell colspan="3" class="text-center">{{ __('No messages.') }}</flux:table.cell>
-                            </flux:table.row>
-                        @endforelse
-                    </flux:table.rows>
-                </flux:table>
+            {{-- Lista wiadomości --}}
+            <div @class(['flex min-h-0 flex-col rounded-lg border border-zinc-200 dark:border-zinc-700', 'hidden lg:flex' => $uid !== 0])>
+                <div class="min-h-0 flex-1 divide-y divide-zinc-200 overflow-y-auto dark:divide-zinc-700">
+                    @forelse ($result['messages'] as $item)
+                        <div wire:key="msg-{{ $item->uid }}" wire:click="open({{ $item->uid }})"
+                            @class(['group cursor-pointer px-3 py-2', 'bg-blue-50 dark:bg-blue-950/40' => $item->uid === $uid, 'hover:bg-zinc-50 dark:hover:bg-zinc-800' => $item->uid !== $uid])>
+                            <div class="flex items-center gap-2">
+                                <span @class(['size-2 shrink-0 rounded-full', 'bg-blue-600' => ! $item->seen, 'bg-transparent' => $item->seen]) title="{{ $item->seen ? __('Read') : __('Unread') }}"></span>
+                                <span @class(['flex-1 truncate text-sm', 'font-semibold text-zinc-900 dark:text-white' => ! $item->seen, 'text-zinc-600 dark:text-zinc-300' => $item->seen])>{{ $item->from }}</span>
+                                <span class="shrink-0 text-xs text-zinc-500">{{ $item->date?->isToday() ? $item->date->format('H:i') : $item->date?->format('d.m.y') }}</span>
+                            </div>
+                            <div class="flex items-center gap-2 ps-4">
+                                <span @class(['flex-1 truncate text-sm', 'font-semibold' => ! $item->seen])>{{ $item->subject !== '' ? $item->subject : __('(no subject)') }}</span>
+                                @if ($item->hasAttachments)
+                                    <flux:icon.paper-clip variant="micro" class="shrink-0 text-zinc-400" />
+                                @endif
+                                <span class="hidden shrink-0 gap-1 group-hover:flex" wire:click.stop>
+                                    <flux:button size="xs" variant="ghost" :icon="$item->seen ? 'envelope' : 'envelope-open'"
+                                        wire:click="toggleSeen({{ $item->uid }}, {{ $item->seen ? 'false' : 'true' }})"
+                                        :aria-label="$item->seen ? __('Mark as unread') : __('Mark as read')" />
+                                    <flux:button size="xs" variant="ghost" icon="trash"
+                                        wire:click="delete({{ $item->uid }})"
+                                        :wire:confirm="$inTrash ? __('Delete this message permanently?') : null"
+                                        :aria-label="__('Delete')" />
+                                </span>
+                            </div>
+                        </div>
+                    @empty
+                        <div class="p-6 text-center text-sm text-zinc-500">{{ __('No messages.') }}</div>
+                    @endforelse
+                </div>
 
                 @if ($this->lastPage() > 1)
-                    <div class="flex items-center justify-between">
-                        <flux:button size="sm" icon="chevron-left" wire:click="goTo({{ $page - 1 }})" :disabled="$page <= 1">{{ __('Newer') }}</flux:button>
+                    <div class="flex items-center justify-between border-t border-zinc-200 p-2 dark:border-zinc-700">
+                        <flux:button size="xs" variant="ghost" icon="chevron-left" wire:click="goTo({{ $page - 1 }})" :disabled="$page <= 1">{{ __('Newer') }}</flux:button>
                         <flux:text size="sm">{{ __('Page :page of :pages', ['page' => $page, 'pages' => $this->lastPage()]) }}</flux:text>
-                        <flux:button size="sm" icon:trailing="chevron-right" wire:click="goTo({{ $page + 1 }})" :disabled="$page >= $this->lastPage()">{{ __('Older') }}</flux:button>
+                        <flux:button size="xs" variant="ghost" icon:trailing="chevron-right" wire:click="goTo({{ $page + 1 }})" :disabled="$page >= $this->lastPage()">{{ __('Older') }}</flux:button>
+                    </div>
+                @endif
+            </div>
+
+            {{-- Wiadomość --}}
+            <div class="flex min-h-0 flex-col rounded-lg border border-zinc-200 dark:border-zinc-700">
+                @if ($message)
+                    <div class="space-y-3 border-b border-zinc-200 p-4 dark:border-zinc-700">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <flux:heading size="lg">{{ $message->subject !== '' ? $message->subject : __('(no subject)') }}</flux:heading>
+                            <div class="flex gap-1">
+                                <flux:button size="sm" variant="ghost" icon="arrow-left" wire:click="close" class="lg:hidden" :aria-label="__('Back')" />
+                                <flux:button size="sm" variant="ghost" icon="envelope" wire:click="toggleSeen({{ $message->uid }}, false)">{{ __('Mark as unread') }}</flux:button>
+                                <flux:button size="sm" variant="ghost" icon="trash" wire:click="delete({{ $message->uid }})"
+                                    :wire:confirm="$inTrash ? __('Delete this message permanently?') : null">{{ __('Delete') }}</flux:button>
+                            </div>
+                        </div>
+                        <div class="text-sm">
+                            <div><span class="text-zinc-500">{{ __('From') }}:</span> <strong>{{ $message->from }}</strong></div>
+                            <div><span class="text-zinc-500">{{ __('To') }}:</span> {{ implode(', ', $message->to) }}</div>
+                            @if ($message->cc !== [])
+                                <div><span class="text-zinc-500">{{ __('Copy (CC)') }}:</span> {{ implode(', ', $message->cc) }}</div>
+                            @endif
+                            <div class="text-zinc-500">{{ $message->date?->translatedFormat('l, d.m.Y H:i') }}</div>
+                        </div>
+
+                        @if ($message->attachments !== [])
+                            <div class="flex flex-wrap gap-2">
+                                @foreach ($message->attachments as $attachment)
+                                    @php([$icon, $color] = $attachment->icon())
+                                    <div class="flex w-56 items-center gap-2 rounded-lg border border-zinc-200 p-2 dark:border-zinc-700">
+                                        <flux:icon :name="$icon" class="size-8 shrink-0 {{ $color }}" />
+                                        <div class="min-w-0 flex-1">
+                                            <div class="truncate text-sm" title="{{ $attachment->name }}">{{ $attachment->name }}</div>
+                                            <div class="text-xs text-zinc-500">{{ strtoupper(pathinfo($attachment->name, PATHINFO_EXTENSION) ?: $attachment->kind()) }} · {{ $attachment->sizeLabel() }}</div>
+                                        </div>
+                                        @if ($attachment->previewable())
+                                            <flux:button size="xs" variant="ghost" icon="eye" target="_blank" :aria-label="__('Open')"
+                                                :href="route('mailbox.attachment', ['folder' => $folder, 'uid' => $message->uid, 'index' => $attachment->index, 'inline' => 1])" />
+                                        @endif
+                                        <flux:button size="xs" variant="ghost" icon="arrow-down-tray" :aria-label="__('Download')"
+                                            :href="route('mailbox.attachment', ['folder' => $folder, 'uid' => $message->uid, 'index' => $attachment->index])" />
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
+
+                        @if (! $remoteImages && MailView::hasRemoteImages($message))
+                            <flux:text size="sm">
+                                {{ __('Images from the internet are blocked (they can reveal that you opened the message).') }}
+                                <flux:link wire:click="showImages" class="cursor-pointer">{{ __('Show images') }}</flux:link>
+                            </flux:text>
+                        @endif
+                    </div>
+
+                    {{-- Ramka bez skryptów i formularzy; linki otwierają się w nowej karcie. --}}
+                    <iframe sandbox="allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"
+                        srcdoc="{{ MailView::document($message, $remoteImages) }}"
+                        class="min-h-[50vh] w-full flex-1 rounded-b-lg bg-white"
+                        title="{{ __('Message') }}"></iframe>
+                @elseif ($messageError)
+                    <div class="p-6"><flux:text class="text-red-600">{{ $messageError }}</flux:text></div>
+                @else
+                    <div class="flex flex-1 items-center justify-center p-6 text-sm text-zinc-500">
+                        <div class="text-center">
+                            <flux:icon.envelope class="mx-auto mb-2 size-10 text-zinc-300" />
+                            {{ __('Select a message to read it.') }}
+                        </div>
                     </div>
                 @endif
             </div>

@@ -102,3 +102,40 @@ test('project list filters by client and search', function () {
         ->assertSee('Jagel Kantine')
         ->assertDontSee('Halle 9');
 });
+
+test('the project list shows the newest projects first', function () {
+    $older = Project::factory()->create(['number' => '900000001']);
+    $newer = Project::factory()->create(['number' => '100000001']);
+
+    Livewire::actingAs($this->admin)
+        ->test('pages::projects.index')
+        ->assertSeeInOrder([$newer->number, $older->number]);
+});
+
+test('a new project copies the site from an earlier project', function () {
+    $client = Contractor::factory()->create();
+    $tkms = Project::factory()->for($client)->create([
+        'invoice_label' => 'TKMS Halle 9',
+        'site_name' => 'TKMS GmbH',
+        'site_street' => 'Werftstraße 112-114',
+        'site_zip' => '24143',
+        'site_city' => 'Kiel',
+        'site_country' => 'DE',
+        'km_one_way' => '6.5',
+        'mileage_default' => true,
+    ]);
+
+    Livewire::actingAs($this->admin)
+        ->test('pages::projects.form')
+        ->set('form.contractor_id', (string) $client->id)
+        ->set('form.site_name', 'tkms')
+        ->assertSee('Werftstraße 112-114')
+        ->call('copySite', $tkms->id)
+        ->assertSet('form.site_street', 'Werftstraße 112-114')
+        ->assertSet('form.site_zip', '24143')
+        ->assertSet('form.site_city', 'Kiel')
+        ->assertSet('form.km_one_way', '6.5')
+        ->assertSet('form.mileage_default', true)
+        ->assertSet('form.invoice_label', 'TKMS Halle 9')
+        ->assertDontSee('Earlier projects');
+});

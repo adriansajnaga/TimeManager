@@ -40,6 +40,62 @@ new class extends Component {
         }
     }
 
+    /** Projekt, z którego przepisano miejsce (ukrywa podpowiedzi). */
+    public ?int $copiedFrom = null;
+
+    /**
+     * Wcześniejsze projekty o podobnym miejscu/etykiecie — po jednym na adres, najnowsze najpierw.
+     *
+     * @return Collection<int, Project>
+     */
+    #[Computed]
+    public function siteSuggestions(): Collection
+    {
+        $terms = array_values(array_filter(
+            [trim($this->form->site_name), trim($this->form->invoice_label), trim($this->form->site_city)],
+            fn (string $term) => mb_strlen($term) >= 2,
+        ));
+
+        // Tylko przy nowym projekcie — przy edycji podpowiedzi by przeszkadzały.
+        if ($terms === [] || $this->copiedFrom !== null || $this->form->project !== null) {
+            return new Collection;
+        }
+
+        return Project::query()
+            ->with('contractor')
+            ->when($this->form->project, fn ($query) => $query->whereKeyNot($this->form->project->id))
+            ->when($this->form->contractor_id, fn ($query) => $query->where('contractor_id', $this->form->contractor_id))
+            ->where(function ($query) use ($terms) {
+                foreach ($terms as $term) {
+                    foreach (['site_name', 'invoice_label', 'site_city', 'name'] as $column) {
+                        $query->orWhere($column, 'like', '%'.$term.'%');
+                    }
+                }
+            })
+            ->latest('id')
+            ->limit(50)
+            ->get()
+            ->unique(fn (Project $project) => mb_strtolower(trim($project->site_name.'|'.$project->site_street.'|'.$project->site_city)))
+            ->take(6)
+            ->values();
+    }
+
+    public function copySite(int $projectId): void
+    {
+        $this->form->copySiteFrom(Project::query()->findOrFail($projectId));
+        $this->copiedFrom = $projectId;
+
+        Flux::toast(text: __('Site data copied from the earlier project.'));
+    }
+
+    public function updatedForm(mixed $value, string $key): void
+    {
+        // Po zmianie wyszukiwanych pól pokaż znowu podpowiedzi.
+        if (in_array($key, ['site_name', 'invoice_label', 'site_city'], true) && $this->copiedFrom !== null && $this->form->project === null) {
+            $this->copiedFrom = null;
+        }
+    }
+
     /**
      * @return Collection<int, Contractor>
      */
@@ -103,7 +159,7 @@ new class extends Component {
 
                 <div class="lg:col-span-3">
                     <flux:input
-                        wire:model="form.invoice_label"
+                        wire:model.live.debounce.400ms="form.invoice_label"
                         :label="__('Label on invoice')"
                         :description="__('Projects with the same label are listed once on the invoice. Empty = project name.')"
                     />
@@ -114,9 +170,26 @@ new class extends Component {
         <flux:card class="space-y-6">
             <flux:heading size="lg">{{ __('Site') }}</flux:heading>
 
+            @if ($this->siteSuggestions->isNotEmpty())
+                <div class="space-y-2 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/40">
+                    <flux:text size="sm">{{ __('Earlier projects — click to copy the address, distance and settings:') }}</flux:text>
+                    <div class="flex flex-col gap-1">
+                        @foreach ($this->siteSuggestions as $suggestion)
+                            <button type="button" wire:click="copySite({{ $suggestion->id }})" wire:key="site-{{ $suggestion->id }}"
+                                class="rounded px-2 py-1 text-start text-sm hover:bg-blue-100 dark:hover:bg-blue-900/50">
+                                <strong>{{ $suggestion->invoiceLabel() }}</strong>
+                                — {{ collect([$suggestion->site_name, $suggestion->site_street, trim($suggestion->site_zip.' '.$suggestion->site_city)])->filter()->implode(', ') }}
+                                @if ($suggestion->km_one_way !== null) · {{ rtrim(rtrim((string) $suggestion->km_one_way, '0'), '.') }} km @endif
+                                <span class="text-zinc-500">({{ $suggestion->number }}{{ $form->contractor_id ? '' : ', '.$suggestion->contractor->name }})</span>
+                            </button>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
             <div class="grid gap-6 lg:grid-cols-3">
                 <div class="lg:col-span-3">
-                    <flux:input wire:model="form.site_name" :label="__('End customer / site')" />
+                    <flux:input wire:model.live.debounce.400ms="form.site_name" :label="__('End customer / site')" />
                 </div>
                 <div class="lg:col-span-3">
                     <flux:input wire:model="form.site_street" :label="__('Street')" />

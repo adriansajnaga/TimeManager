@@ -81,6 +81,29 @@ class ProjectForm extends Form
     /**
      * Nowy projekt dziedziczy walutę umowy i kraj budowy po kliencie.
      */
+    /**
+     * Dane miejsca z wcześniejszego projektu (adres, odległość, kilometrówka, etykieta, pracownicy).
+     */
+    public function copySiteFrom(Project $source): void
+    {
+        $this->contractor_id ??= (string) $source->contractor_id;
+        $this->site_name = (string) $source->site_name;
+        $this->site_street = (string) $source->site_street;
+        $this->site_zip = (string) $source->site_zip;
+        $this->site_city = (string) $source->site_city;
+        $this->site_country = (string) $source->site_country;
+        $this->km_one_way = $source->km_one_way === null ? '' : rtrim(rtrim((string) $source->km_one_way, '0'), '.');
+        $this->mileage_default = $source->mileage_default;
+
+        if (trim($this->invoice_label) === '') {
+            $this->invoice_label = (string) $source->invoice_label;
+        }
+
+        if ($this->user_ids === []) {
+            $this->user_ids = array_values($source->users()->pluck('users.id')->map(fn ($id) => (string) $id)->all());
+        }
+    }
+
     public function applyContractorDefaults(): void
     {
         $contractor = Contractor::find($this->contractor_id);

@@ -14,7 +14,8 @@ use Webklex\PHPIMAP\Message;
 
 /**
  * Skrzynka IMAP z ustawień (Administracja → E-mail), biblioteka webklex/php-imap
- * (czysty PHP — rozszerzenie imap nie jest potrzebne).
+ * (czysty PHP — rozszerzenie imap nie jest potrzebne). Nagłówki dekodujemy sami
+ * (MailHeader), bo bez rozszerzenia imap tematy z polskimi znakami zostawały zakodowane.
  */
 final class ImapMailbox implements Mailbox
 {
@@ -34,10 +35,16 @@ final class ImapMailbox implements Mailbox
 
             foreach ($this->client()->getFolders(false) as $folder) {
                 /** @var Folder $folder */
-                $folders[] = new MailFolder($folder->path, $folder->full_name);
+                try {
+                    $unseen = (int) ($folder->status()['unseen'] ?? 0);
+                } catch (Throwable) {
+                    $unseen = null;
+                }
+
+                $folders[] = new MailFolder($folder->path, $this->folderName($folder), $unseen, MailFolder::looksLikeTrash($folder->path));
             }
 
-            usort($folders, fn (MailFolder $a, MailFolder $b) => [strtoupper($a->path) !== 'INBOX', $a->name] <=> [strtoupper($b->path) !== 'INBOX', $b->name]);
+            usort($folders, fn (MailFolder $a, MailFolder $b) => [strtoupper($a->path) !== 'INBOX', $a->isTrash, $a->name] <=> [strtoupper($b->path) !== 'INBOX', $b->isTrash, $b->name]);
 
             return $folders;
         });
@@ -61,7 +68,7 @@ final class ImapMailbox implements Mailbox
                 $messages[] = new MailSummary(
                     uid: $message->getUid(),
                     from: $this->address($message->getFrom()->first()),
-                    subject: (string) $message->getSubject()->toString(),
+                    subject: $this->subject($message),
                     date: $this->date($message),
                     seen: $message->getFlags()->has('seen'),
                     hasAttachments: $message->hasAttachments(),
@@ -77,22 +84,22 @@ final class ImapMailbox implements Mailbox
         return $this->guard(function () use ($folder, $uid) {
             $message = $this->fetch($folder, $uid);
 
+            // Otwarcie = przeczytana (pobieramy z FT_PEEK, więc flagę ustawiamy sami).
+            if (! $message->getFlags()->has('seen')) {
+                $message->setFlag('Seen');
+            }
+
             return new MailMessage(
                 uid: $uid,
                 from: $this->address($message->getFrom()->first()),
                 to: $this->addresses($message->getTo()->all()),
                 cc: $this->addresses($message->getCc()->all()),
-                subject: (string) $message->getSubject()->toString(),
+                subject: $this->subject($message),
                 date: $this->date($message),
                 html: $message->hasHTMLBody() ? $message->getHTMLBody() : null,
                 text: $message->getTextBody(),
                 attachments: array_values($message->getAttachments()->values()->map(
-                    fn (Attachment $attachment, int $index) => new MailAttachment(
-                        index: $index,
-                        name: (string) ($attachment->name ?: $attachment->filename ?: 'attachment-'.($index + 1)),
-                        mime: (string) ($attachment->getMimeType() ?? 'application/octet-stream'),
-                        size: (int) $attachment->size,
-                    ),
+                    fn (Attachment $attachment, int $index) => $this->attachmentOf($attachment, $index),
                 )->all()),
             );
         });
@@ -107,13 +114,33 @@ final class ImapMailbox implements Mailbox
                 throw new MailboxException(__('The attachment does not exist.'));
             }
 
-            return new MailAttachment(
-                index: $index,
-                name: (string) ($attachment->name ?: $attachment->filename ?: 'attachment-'.($index + 1)),
-                mime: (string) ($attachment->getMimeType() ?? 'application/octet-stream'),
-                size: (int) $attachment->size,
-                content: (string) $attachment->content,
-            );
+            return $this->attachmentOf($attachment, $index, withContent: true);
+        });
+    }
+
+    public function setSeen(string $folder, int $uid, bool $seen): void
+    {
+        $this->guard(function () use ($folder, $uid, $seen) {
+            $message = $this->fetch($folder, $uid, withBody: false);
+            $seen ? $message->setFlag('Seen') : $message->unsetFlag('Seen');
+        });
+    }
+
+    public function delete(string $folder, int $uid): bool
+    {
+        return $this->guard(function () use ($folder, $uid) {
+            $message = $this->fetch($folder, $uid, withBody: false);
+            $trash = $this->trashPath();
+
+            if ($trash !== null && $trash !== $folder) {
+                $message->move($trash, true);
+
+                return true;
+            }
+
+            $message->delete(true);
+
+            return false;
         });
     }
 
@@ -156,9 +183,64 @@ final class ImapMailbox implements Mailbox
         return $folder;
     }
 
-    private function fetch(string $folder, int $uid): Message
+    private function trashPath(): ?string
     {
-        return $this->folder($folder)->query()->getMessageByUid($uid);
+        foreach ($this->client()->getFolders(false) as $folder) {
+            /** @var Folder $folder */
+            if (MailFolder::looksLikeTrash($folder->path)) {
+                return $folder->path;
+            }
+        }
+
+        return null;
+    }
+
+    private function fetch(string $folder, int $uid, bool $withBody = true): Message
+    {
+        $query = $this->folder($folder)->query()->leaveUnread();
+
+        if (! $withBody) {
+            $query->setFetchBody(false);
+        }
+
+        return $query->getMessageByUid($uid);
+    }
+
+    /**
+     * Polska nazwa folderu dla znanych folderów serwera (cPanel/Dovecot: INBOX.Sent itd.).
+     */
+    private function folderName(Folder $folder): string
+    {
+        $leaf = strtolower((string) preg_replace('/^INBOX[.\/]/i', '', $folder->path));
+
+        return match (true) {
+            strtoupper($folder->path) === 'INBOX' => __('Inbox'),
+            in_array($leaf, ['sent', 'sent items', 'sent messages'], true) => __('Sent'),
+            in_array($leaf, ['drafts'], true) => __('Drafts'),
+            in_array($leaf, ['junk', 'spam'], true) => __('Spam'),
+            in_array($leaf, ['archive'], true) => __('Archive folder'),
+            MailFolder::looksLikeTrash($folder->path) => __('Trash'),
+            default => MailHeader::decode($folder->name),
+        };
+    }
+
+    private function subject(Message $message): string
+    {
+        $raw = $message->getHeader()?->raw;
+
+        return ($raw !== null ? MailHeader::field($raw, 'Subject') : null)
+            ?? MailHeader::decode((string) $message->getSubject()->toString());
+    }
+
+    private function attachmentOf(Attachment $attachment, int $index, bool $withContent = false): MailAttachment
+    {
+        return new MailAttachment(
+            index: $index,
+            name: MailHeader::decode((string) ($attachment->name ?: $attachment->filename ?: 'attachment-'.($index + 1))),
+            mime: (string) ($attachment->getMimeType() ?? 'application/octet-stream'),
+            size: (int) $attachment->size,
+            content: $withContent ? (string) $attachment->content : null,
+        );
     }
 
     private function date(Message $message): ?CarbonImmutable
@@ -176,7 +258,9 @@ final class ImapMailbox implements Mailbox
             return '';
         }
 
-        return $address->personal !== '' ? $address->personal.' <'.$address->mail.'>' : $address->mail;
+        $name = MailHeader::decode($address->personal);
+
+        return $name !== '' && $name !== $address->mail ? $name.' <'.$address->mail.'>' : $address->mail;
     }
 
     /**

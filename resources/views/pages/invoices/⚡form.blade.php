@@ -170,7 +170,7 @@ new class extends Component {
         return Project::query()
             ->where('contractor_id', $this->form->contractor_id)
             ->where(fn ($query) => $query->where('billing_type', ProjectBillingType::Fixed)->when($this->form->project_id, fn ($query) => $query->orWhere('id', $this->form->project_id)))
-            ->orderBy('number')
+            ->latest('id')
             ->get();
     }
 

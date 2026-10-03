@@ -57,6 +57,54 @@ new class extends Component {
         }
     }
 
+    /**
+     * Powód, dla którego kontrahenta nie można usunąć (null = można).
+     */
+    public function deleteBlocker(): ?string
+    {
+        $contractor = $this->form->contractor;
+
+        if ($contractor === null) {
+            return null;
+        }
+
+        if ($contractor->projects()->exists()) {
+            return __('The contractor has projects. Delete or move them first, or mark the contractor as inactive.');
+        }
+
+        if (\App\Models\Settlement::query()->where('contractor_id', $contractor->id)->exists()) {
+            return __('The contractor has settlements. Mark the contractor as inactive instead.');
+        }
+
+        return null;
+    }
+
+    /**
+     * Usunięcie kontrahenta bez projektów i rozliczeń. Faktury zostają (z kopią danych stron).
+     */
+    public function delete(): void
+    {
+        $this->authorize('manage-contractors');
+
+        $contractor = $this->form->contractor;
+        abort_if($contractor === null, 404);
+
+        if (($blocker = $this->deleteBlocker()) !== null) {
+            $this->addError('delete', $blocker);
+
+            return;
+        }
+
+        if ($contractor->logo_path !== null) {
+            Storage::disk('local')->delete($contractor->logo_path);
+        }
+
+        $contractor->delete();
+
+        Flux::toast(variant: 'success', text: __('Contractor deleted.'));
+        $this->redirectRoute('contractors.index', navigate: true);
+    }
+
     public function moveDocument(string $value, int $direction): void
     {
         $this->form->movePackageDocument($value, $direction);
@@ -101,8 +149,17 @@ new class extends Component {
                 </flux:subheading>
             </div>
 
-            <flux:button variant="primary" type="submit" data-test="save-contractor-button">{{ __('Save') }}</flux:button>
+            <div class="flex flex-wrap gap-2">
+                @if ($form->contractor)
+                    <flux:button variant="danger" icon="trash" wire:click="delete"
+                        wire:confirm="{{ __('Delete this contractor? Invoices keep their copy of the data.') }}"
+                        data-test="delete-contractor-button">{{ __('Delete') }}</flux:button>
+                @endif
+                <flux:button variant="primary" type="submit" data-test="save-contractor-button">{{ __('Save') }}</flux:button>
+            </div>
         </div>
+
+        <flux:error name="delete" />
 
         {{-- Dane podstawowe --}}
         <flux:card class="space-y-6">

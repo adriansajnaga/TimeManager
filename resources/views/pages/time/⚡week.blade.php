@@ -175,7 +175,7 @@ new #[Title('Working time')] class extends Component {
 
                 return ['project' => $entries->first()->project, 'days' => $days, 'total' => $total];
             })
-            ->sortBy(fn (array $row) => $row['project']->number)
+            ->sortByDesc(fn (array $row) => $row['project']->id)
             ->values()
             ->all();
     }
@@ -220,7 +220,7 @@ new #[Title('Working time')] class extends Component {
     {
         $owner = User::find($this->form->user_id) ?? $this->owner;
 
-        return Project::query()->availableFor($owner)->with('contractor')->orderByDesc('number')->get();
+        return Project::query()->availableFor($owner)->with('contractor')->latest('id')->get();
     }
 
     public function canSeeOthers(): bool

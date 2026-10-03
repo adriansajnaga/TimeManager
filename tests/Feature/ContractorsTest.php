@@ -4,6 +4,8 @@ use App\Enums\PackageDocument;
 use App\Enums\VatCode;
 use App\Models\ActivityLog;
 use App\Models\Contractor;
+use App\Models\Invoice;
+use App\Models\Project;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -131,4 +133,31 @@ test('edit page renders for an existing contractor', function () {
         ->get(route('contractors.edit', $contractor))
         ->assertOk()
         ->assertSee('TKMS GmbH');
+});
+
+test('a contractor without projects can be deleted, invoices keep their copy', function () {
+    $contractor = Contractor::factory()->create(['name' => 'Do usunięcia']);
+    $invoice = Invoice::factory()->for($contractor)->create();
+
+    Livewire::actingAs($this->admin)
+        ->test('pages::contractors.form', ['contractor' => $contractor])
+        ->call('delete')
+        ->assertHasNoErrors()
+        ->assertRedirect(route('contractors.index'));
+
+    expect(Contractor::query()->find($contractor->id))->toBeNull()
+        ->and($invoice->fresh()->contractor_id)->toBeNull()
+        ->and($invoice->fresh()->buyer['name'])->toBe('Do usunięcia');
+});
+
+test('a contractor with projects cannot be deleted', function () {
+    $contractor = Contractor::factory()->create();
+    Project::factory()->for($contractor)->create();
+
+    Livewire::actingAs($this->admin)
+        ->test('pages::contractors.form', ['contractor' => $contractor])
+        ->call('delete')
+        ->assertHasErrors('delete');
+
+    expect($contractor->fresh())->not->toBeNull();
 });
