@@ -43,6 +43,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('invoices/{invoice}', 'pages::invoices.show')->name('invoices.show');
         Route::livewire('invoices/{invoice}/edit', 'pages::invoices.form')->name('invoices.edit');
         Route::get('invoices/{invoice}/pdf', [InvoiceController::class, 'pdf'])->name('invoices.pdf');
+        Route::get('invoices/{invoice}/xml', [InvoiceController::class, 'xml'])->name('invoices.xml');
     });
 });
 

@@ -57,6 +57,23 @@ new class extends Component {
         Flux::toast(text: __('Pro forma cancelled.'));
     }
 
+    public function refreshKsef(InvoiceIssuer $issuer): void
+    {
+        $this->authorize('manage-invoices');
+
+        try {
+            $issuer->refreshKsefStatus($this->invoice);
+        } catch (InvoiceException $exception) {
+            $this->addError('ksef', $exception->getMessage());
+
+            return;
+        }
+
+        if ($this->invoice->isInKsef()) {
+            Flux::toast(variant: 'success', text: __('The invoice is in KSeF: :number', ['number' => $this->invoice->ksef_number]));
+        }
+    }
+
     public function markPaid(bool $paid = true): void
     {
         $this->authorize('manage-invoices');
@@ -102,7 +119,16 @@ new class extends Component {
                         {{ $invoice->isPaid() ? __('Paid :date', ['date' => $invoice->paid_on->format('d.m.Y')]) : __('Unpaid') }}
                     </flux:badge>
                 @endif
+                @if ($invoice->ksef_status)
+                    <flux:badge :color="$invoice->ksef_status->color()" icon="shield-check">{{ $invoice->ksef_status->label() }}</flux:badge>
+                @endif
+                @if ($invoice->isFromTestKsef())
+                    <flux:badge color="blue">{{ __('KSeF test') }}</flux:badge>
+                @endif
             </div>
+            @if ($invoice->ksef_number)
+                <flux:text class="mt-1">{{ __('KSeF number') }}: <strong>{{ $invoice->ksef_number }}</strong></flux:text>
+            @endif
             <flux:subheading>
                 <flux:link :href="route('invoices.index', ['direction' => $invoice->direction->value])" wire:navigate>
                     {{ $invoice->isSales() ? __('Sales invoices') : __('Purchase invoices') }}
@@ -113,6 +139,14 @@ new class extends Component {
         <div class="flex flex-wrap gap-2">
             @if ($invoice->isSales())
                 <flux:button icon="document-arrow-down" :href="route('invoices.pdf', $invoice)" target="_blank">{{ __('PDF') }}</flux:button>
+            @endif
+
+            @if ($invoice->xml)
+                <flux:button icon="code-bracket" :href="route('invoices.xml', $invoice)">{{ __('XML') }}</flux:button>
+            @endif
+
+            @if ($invoice->ksef_status === \App\Enums\KsefStatus::Pending)
+                <flux:button icon="arrow-path" wire:click="refreshKsef">{{ __('Check KSeF status') }}</flux:button>
             @endif
 
             @if ($invoice->isEditable())
@@ -159,7 +193,25 @@ new class extends Component {
         <flux:callout icon="exclamation-triangle" color="red" :heading="__('The invoice was not issued')">
             <flux:callout.text>{{ $message }}</flux:callout.text>
         </flux:callout>
+    @else
+        @if ($invoice->isDraft() && $invoice->ksef_error)
+            <flux:callout icon="exclamation-triangle" color="red" :heading="__('Last attempt was rejected by KSeF')">
+                <flux:callout.text>{{ $invoice->ksef_error }}</flux:callout.text>
+            </flux:callout>
+        @endif
     @enderror
+
+    @error('ksef')
+        <flux:callout icon="exclamation-triangle" color="red" :heading="__('KSeF')">
+            <flux:callout.text>{{ $message }}</flux:callout.text>
+        </flux:callout>
+    @enderror
+
+    @if ($invoice->ksef_status === \App\Enums\KsefStatus::Pending)
+        <flux:callout icon="clock" color="amber" :heading="__('Waiting for KSeF')">
+            <flux:callout.text>{{ __('KSeF received the invoice but has not confirmed it yet. Check the status in a moment.') }}</flux:callout.text>
+        </flux:callout>
+    @endif
 
     @if ($problems !== [])
         <flux:callout icon="information-circle" color="amber" :heading="__('Missing before issuing')">

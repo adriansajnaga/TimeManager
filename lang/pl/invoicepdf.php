@@ -49,6 +49,9 @@ return [
     'exemption' => 'Podstawa zwolnienia z VAT',
     'vat_in_pln' => 'Kwota VAT w PLN',
     'rate_note' => 'kurs średni NBP :rate PLN/:currency, tabela :table z dnia :date',
+    'verify_title' => 'Sprawdź, czy Twoja faktura znajduje się w KSeF!',
+    'verify_hint' => 'Nie możesz zeskanować kodu? Otwórz link weryfikacyjny poniżej.',
+    'test_environment' => 'Faktura ze środowiska testowego KSeF — bez mocy prawnej.',
     'notes' => 'Uwagi',
     'payment' => [
         'transfer' => 'przelew',

@@ -5,6 +5,7 @@ namespace App\Livewire\Forms;
 use App\Enums\InvoiceDirection;
 use App\Enums\InvoiceKind;
 use App\Enums\InvoiceLanguage;
+use App\Enums\InvoiceSource;
 use App\Enums\InvoiceStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\VatCode;
@@ -363,7 +364,7 @@ class InvoiceForm extends Form
 
             // Faktura zakupu nie ma szkicu — zapis = wprowadzenie do rejestru.
             if ($purchase && ! $invoice->exists) {
-                $invoice->forceFill(['status' => InvoiceStatus::Issued, 'issued_at' => now(), 'issued_by' => Auth::id()]);
+                $invoice->forceFill(['status' => InvoiceStatus::Issued, 'source' => InvoiceSource::Manual, 'issued_at' => now(), 'issued_by' => Auth::id()]);
             }
 
             $invoice->save();

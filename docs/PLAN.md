@@ -58,8 +58,8 @@ plus moduł faktur (sprzedaż, zakupy z KSeF, korekty, zaliczki, proformy). Wła
 | 2 | Role i uprawnienia, PL/EN/DE, dziennik zmian, ustawienia (firma, konta, pojazdy), kontrahenci, projekty | ✅ |
 | 3 | Ewidencja czasu, zamykanie KW, Montageauftrag, Stundenzettel, Stundennachweis (mPDF) | ✅ |
 | 4 | Import ze starej bazy + raport zgodności | ✅ |
-| 5 | Moduł Faktury (samodzielny): VAT/KOR/ZAL/ROZ/proforma, PDF PL i PL/EN, kursy NBP, lista sprzedaży i zakupów | ✅ (wystawienie VAT/KOR/ZAL/ROZ czeka na KSeF — faza 6) |
-| 6 | KSeF (test): wysyłka, numeracja z KSeF, status/UPO, pobieranie sprzedaży i zakupów, walidacja XSD | ⏳ |
+| 5 | Moduł Faktury (samodzielny): VAT/KOR/ZAL/ROZ/proforma, PDF PL i PL/EN, kursy NBP, lista sprzedaży i zakupów | ✅ |
+| 6 | KSeF (test): wysyłka, numeracja z KSeF, status, pobieranie sprzedaży i zakupów, walidacja XSD, kod QR | ✅ |
 | 7 | Kilometrówka, materiały, rozliczenia godzin → szkic faktury, pakiet PDF, test akceptacyjny 4/8/2026 | ⏳ |
 | 8 | E-mail (SMTP z ustawień, szablony, logi) | ⏳ |
 | 9 | Projekty ryczałtowe i transze, dashboard | ⏳ |
@@ -78,6 +78,15 @@ plus moduł faktur (sprzedaż, zakupy z KSeF, korekty, zaliczki, proformy). Wła
 2. Czas pracy → KW 31: siatka projektów × dni, wpisy start/koniec/przerwa.
 3. Tygodnie → KW 32: opisy, materiały, PDF Montageauftrag, Stundennachweis, zamknij/otwórz.
 4. Tygodnie → zaznacz zamknięte części + klient → Stundenzettel (98,75 h × 38,00 € = 3.752,50 €).
+
+## Faza 6 — jak sprawdzić
+
+1. Aplikacja Podatnika KSeF **środowiska testowego** (ksef-test.mf.gov.pl) → wygeneruj token (wystawianie i przeglądanie faktur).
+2. Administracja → KSeF: środowisko „Testowe”, NIP, token → Zapisz → Test połączenia.
+3. Faktura → Wystaw: numer = ostatni numer z KSeF w miesiącu + 1, XML sprawdzany ze schematem FA(3) (`resources/ksef/fa3`), wysyłka szyfrowana, numer KSeF. Odrzucona faktura wraca do szkicu z powodem; niepotwierdzona czeka („Sprawdź status w KSeF”).
+4. PDF: numer KSeF i druga strona z kodem QR (KOD I); przycisk XML.
+5. Faktury → „Pobierz z KSeF”: sprzedaż (także z PM i Aplikacji Podatnika) i zakupy z okresu; drugie pobranie niczego nie dubluje.
+6. Produkcja: dopiero po teście — zmiana środowiska w Administracja → KSeF i token z produkcyjnej Aplikacji Podatnika. Dokumenty z testu znikają z list (zostają w bazie).
 
 ## Faza 5 — jak sprawdzić
 

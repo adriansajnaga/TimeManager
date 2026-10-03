@@ -48,6 +48,9 @@ return [
     'exemption' => 'VAT exemption basis',
     'vat_in_pln' => 'VAT amount in PLN',
     'rate_note' => 'NBP average rate :rate PLN/:currency, table :table of :date',
+    'verify_title' => 'Check that your invoice is in KSeF!',
+    'verify_hint' => 'Cannot scan the code? Open the verification link below.',
+    'test_environment' => 'Invoice from the KSeF test environment — not legally binding.',
     'notes' => 'Notes',
     'payment' => [
         'transfer' => 'transfer',

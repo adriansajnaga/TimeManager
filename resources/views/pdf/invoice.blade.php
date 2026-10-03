@@ -19,6 +19,9 @@
                 <img src="{{ $logo }}" style="height: 13mm; margin-bottom: 2mm;" alt=""><br>
             @endif
             <h1>{{ $title }} {{ $invoice->number }}</h1>
+            @if ($invoice->ksef_number)
+                <div class="small" style="margin-top: 1mm;">{{ $t('ksef_number') }}: <span class="bold">{{ $invoice->ksef_number }}</span></div>
+            @endif
             @if ($reverseCharge)
                 <div class="annotation">{{ $t('reverse_charge') }}</div>
             @endif
@@ -155,3 +158,22 @@
 @endif
 
 </div>
+
+{{-- Strona weryfikacyjna (KOD I) jak w wizualizacji KSeF --}}
+@if ($qrUrl)
+    <pagebreak />
+    <div class="inv">
+        <p class="section" style="font-size: 11pt;">{{ $t('verify_title') }}</p>
+        <table class="layout">
+            <tr>
+                <td style="width: 45mm;"><barcode code="{{ $qrUrl }}" type="QR" size="1.1" error="M" disableborder="1" /></td>
+                <td class="small">{{ $t('verify_hint') }}</td>
+            </tr>
+        </table>
+        <p class="tiny" style="margin-top: 3mm;"><a href="{{ $qrUrl }}">{{ $qrUrl }}</a></p>
+        <p class="bold" style="margin-top: 3mm;">{{ $invoice->ksef_number }}</p>
+        @if ($invoice->isFromTestKsef())
+            <p class="center muted" style="margin-top: 40mm;">{{ $t('test_environment') }}</p>
+        @endif
+    </div>
+@endif

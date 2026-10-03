@@ -3,6 +3,7 @@
 use App\Documents\InvoicePdf;
 use App\Enums\InvoiceKind;
 use App\Enums\InvoiceStatus;
+use App\Enums\KsefStatus;
 use App\Enums\VatCode;
 use App\Models\BankAccount;
 use App\Models\CompanySetting;
@@ -13,6 +14,7 @@ use App\Models\User;
 use App\Services\Invoices\InvoiceException;
 use App\Services\Invoices\InvoiceIssuer;
 use App\Services\Invoices\InvoiceNumbering;
+use App\Services\Invoices\InvoiceTransmitter;
 use App\Services\Invoices\NbpExchangeRates;
 use App\Services\Invoices\VatSummary;
 use Brick\Math\BigDecimal;
@@ -21,10 +23,21 @@ use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
 /**
- * Numeracja jak z KSeF, bez połączenia: kolejne numery w miesiącu wystawienia.
+ * Numeracja jak z KSeF, bez połączenia: kolejne numery w miesiącu wystawienia;
+ * wysyłka do KSeF przyjmuje każdą fakturę.
  */
 function fakeNumbering(): void
 {
+    app()->instance(InvoiceTransmitter::class, new class implements InvoiceTransmitter
+    {
+        public function send(Invoice $invoice): void
+        {
+            $invoice->forceFill(['ksef_status' => KsefStatus::Accepted, 'ksef_number' => '8792451081-20260806-'.strtoupper(bin2hex(random_bytes(6))).'-00'])->save();
+        }
+
+        public function refresh(Invoice $invoice): void {}
+    });
+
     app()->instance(InvoiceNumbering::class, new class implements InvoiceNumbering
     {
         private int $next = 7;

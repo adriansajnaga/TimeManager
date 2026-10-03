@@ -4,6 +4,11 @@ use App\Enums\InvoiceDirection;
 use App\Enums\InvoiceKind;
 use App\Enums\InvoiceStatus;
 use App\Models\Invoice;
+use App\Models\KsefSetting;
+use App\Services\Invoices\InvoiceException;
+use App\Services\Ksef\KsefInvoiceImporter;
+use Carbon\CarbonImmutable;
+use Flux\Flux;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -31,16 +36,71 @@ new #[Title('Invoices')] class extends Component {
     #[Url(except: '')]
     public string $search = '';
 
+    /** Zakres pobierania z KSeF. */
+    public string $ksefFrom = '';
+
+    public string $ksefTo = '';
+
     public function mount(): void
     {
         if (InvoiceDirection::tryFrom($this->direction) === null) {
             $this->direction = InvoiceDirection::Sales->value;
         }
+
+        // Od ostatniego pobrania (z tygodniowym zapasem) albo od startu KSeF dla firmy (04/2026).
+        $syncedUntil = KsefSetting::current()->synced_until;
+        $this->ksefFrom = ($syncedUntil?->subDays(7) ?? CarbonImmutable::create(2026, 4, 1))->toDateString();
+        $this->ksefTo = CarbonImmutable::today()->toDateString();
     }
 
     public function updated(string $property): void
     {
-        $this->resetPage();
+        if (! str_starts_with($property, 'ksef')) {
+            $this->resetPage();
+        }
+    }
+
+    public function importFromKsef(KsefInvoiceImporter $importer): void
+    {
+        $this->authorize('manage-invoices');
+
+        $this->validate([
+            'ksefFrom' => ['required', 'date'],
+            'ksefTo' => ['required', 'date', 'after_or_equal:ksefFrom', 'before_or_equal:today'],
+        ]);
+
+        @set_time_limit(300);
+
+        try {
+            $summary = $importer->import(CarbonImmutable::parse($this->ksefFrom), CarbonImmutable::parse($this->ksefTo));
+        } catch (InvoiceException $exception) {
+            $this->addError('ksef', $exception->getMessage());
+
+            return;
+        }
+
+        $settings = KsefSetting::current();
+        $settings->synced_until = CarbonImmutable::parse($this->ksefTo);
+        $settings->save();
+
+        Flux::modal('ksef-import')->close();
+        Flux::toast(
+            variant: $summary['failed'] === [] ? 'success' : 'warning',
+            text: __('KSeF: :sales new sales, :purchases new purchases, :confirmed confirmed, :known already here.', [
+                'sales' => $summary['sales'],
+                'purchases' => $summary['purchases'],
+                'confirmed' => $summary['confirmed'],
+                'known' => $summary['known'],
+            ])
+                .($summary['failed'] !== [] ? ' '.__('Could not read: :numbers', ['numbers' => implode(', ', $summary['failed'])]) : ''),
+        );
+
+        unset($this->invoices, $this->totals);
+    }
+
+    public function ksefConfigured(): bool
+    {
+        return KsefSetting::current()->isConfigured();
     }
 
     /**
@@ -117,6 +177,13 @@ new #[Title('Invoices')] class extends Component {
             <flux:subheading>{{ __('Sales and purchase invoices, independent of projects.') }}</flux:subheading>
         </div>
 
+        <div class="flex flex-wrap gap-2">
+        @if ($this->ksefConfigured())
+            <flux:modal.trigger name="ksef-import">
+                <flux:button icon="cloud-arrow-down">{{ __('Download from KSeF') }}</flux:button>
+            </flux:modal.trigger>
+        @endif
+
         @if ($isSales)
             <flux:dropdown position="bottom" align="end">
                 <flux:button variant="primary" icon="plus" icon:trailing="chevron-down">{{ __('New invoice') }}</flux:button>
@@ -131,7 +198,31 @@ new #[Title('Invoices')] class extends Component {
                 {{ __('New purchase invoice') }}
             </flux:button>
         @endif
+        </div>
     </div>
+
+    <flux:modal name="ksef-import" class="md:w-[28rem]">
+        <form wire:submit="importFromKsef" class="space-y-6">
+            <div>
+                <flux:heading size="lg">{{ __('Download from KSeF') }}</flux:heading>
+                <flux:text class="mt-2">{{ __('Sales (also from PM and the taxpayer application) and purchase invoices issued in this period. Invoices already in the application are skipped.') }}</flux:text>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <flux:input wire:model="ksefFrom" type="date" :label="__('From')" />
+                <flux:input wire:model="ksefTo" type="date" :label="__('To')" />
+            </div>
+
+            <flux:error name="ksef" />
+
+            <div class="flex justify-end gap-2">
+                <flux:modal.close>
+                    <flux:button variant="ghost">{{ __('Cancel') }}</flux:button>
+                </flux:modal.close>
+                <flux:button variant="primary" type="submit" wire:loading.attr="disabled">{{ __('Download') }}</flux:button>
+            </div>
+        </form>
+    </flux:modal>
 
     <div class="flex flex-wrap items-end gap-4">
         <flux:radio.group wire:model.live="direction" variant="segmented">

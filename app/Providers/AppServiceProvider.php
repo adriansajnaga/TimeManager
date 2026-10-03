@@ -7,7 +7,10 @@ use App\Models\User;
 use App\Services\Ai\ClaudeTextAssistant;
 use App\Services\Ai\TextAssistant;
 use App\Services\Invoices\InvoiceNumbering;
+use App\Services\Invoices\InvoiceTransmitter;
+use App\Services\Ksef\KsefClient;
 use App\Services\Ksef\KsefInvoiceNumbering;
+use App\Services\Ksef\KsefInvoiceSender;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -23,7 +26,9 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(TextAssistant::class, fn () => ClaudeTextAssistant::fromSettings());
+        $this->app->bind(KsefClient::class, fn () => KsefClient::forCurrentSettings());
         $this->app->bind(InvoiceNumbering::class, KsefInvoiceNumbering::class);
+        $this->app->bind(InvoiceTransmitter::class, KsefInvoiceSender::class);
     }
 
     /**

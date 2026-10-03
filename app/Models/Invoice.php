@@ -5,7 +5,10 @@ namespace App\Models;
 use App\Enums\InvoiceDirection;
 use App\Enums\InvoiceKind;
 use App\Enums\InvoiceLanguage;
+use App\Enums\InvoiceSource;
 use App\Enums\InvoiceStatus;
+use App\Enums\KsefEnvironment;
+use App\Enums\KsefStatus;
 use App\Enums\PaymentMethod;
 use App\Models\Concerns\LogsActivity;
 use App\Services\Invoices\VatSummary;
@@ -61,6 +64,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable|null $issued_at
  * @property int|null $issued_by
  * @property CarbonImmutable|null $cancelled_at
+ * @property InvoiceSource $source
+ * @property KsefStatus|null $ksef_status
+ * @property string|null $ksef_number
+ * @property KsefEnvironment|null $ksef_environment
+ * @property string|null $ksef_session
+ * @property string|null $ksef_reference
+ * @property CarbonImmutable|null $ksef_sent_at
+ * @property string|null $ksef_error
+ * @property string|null $xml
  * @property-read Collection<int, InvoiceItem> $items
  * @property-read Collection<int, Invoice> $advances
  */
@@ -82,6 +94,7 @@ class Invoice extends Model
         'status' => 'draft',
         'currency' => 'PLN',
         'language' => 'pl',
+        'source' => 'app',
         'payment_method' => 'transfer',
         'net' => '0.00',
         'vat' => '0.00',
@@ -117,7 +130,24 @@ class Invoice extends Model
             'corrected_issue_date' => 'date',
             'issued_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'source' => InvoiceSource::class,
+            'ksef_status' => KsefStatus::class,
+            'ksef_environment' => KsefEnvironment::class,
+            'ksef_sent_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Dokumenty z innego środowiska KSeF (np. testowego po przejściu na produkcję) zostają
+     * w bazie, ale nie mieszają się z bieżącymi. Szkice i zakupy ręczne nie mają środowiska.
+     */
+    protected static function booted(): void
+    {
+        static::addGlobalScope('ksefEnvironment', function (Builder $query) {
+            $query->where(fn (Builder $query) => $query
+                ->whereNull($query->qualifyColumn('ksef_environment'))
+                ->orWhere($query->qualifyColumn('ksef_environment'), KsefSetting::current()->environment->value));
+        });
     }
 
     /**
@@ -221,7 +251,24 @@ class Invoice extends Model
      */
     public function isEditable(): bool
     {
+        if ($this->source === InvoiceSource::Ksef) {
+            return false;
+        }
+
         return $this->isSales() ? $this->isDraft() : $this->status !== InvoiceStatus::Cancelled;
+    }
+
+    public function isInKsef(): bool
+    {
+        return filled($this->ksef_number);
+    }
+
+    /**
+     * Dokument ze środowiska testowego KSeF — ćwiczebny, bez mocy prawnej.
+     */
+    public function isFromTestKsef(): bool
+    {
+        return $this->ksef_environment !== null && ! $this->ksef_environment->isProduction();
     }
 
     /**

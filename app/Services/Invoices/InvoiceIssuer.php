@@ -8,6 +8,7 @@ use App\Enums\InvoiceStatus;
 use App\Enums\VatCode;
 use App\Models\Invoice;
 use App\Models\User;
+use App\Services\Ksef\KsefRejectedException;
 use Brick\Math\BigDecimal;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +19,10 @@ use Illuminate\Support\Facades\DB;
  */
 final class InvoiceIssuer
 {
-    public function __construct(private readonly InvoiceNumbering $numbering) {}
+    public function __construct(
+        private readonly InvoiceNumbering $numbering,
+        private readonly InvoiceTransmitter $transmitter,
+    ) {}
 
     /**
      * @throws InvoiceException
@@ -38,7 +42,7 @@ final class InvoiceIssuer
             throw new InvoiceException(implode(' ', $problems));
         }
 
-        return DB::transaction(function () use ($invoice, $user) {
+        DB::transaction(function () use ($invoice, $user) {
             $number = $invoice->kind === InvoiceKind::Proforma
                 ? $this->proformaNumber($invoice->issue_date)
                 : $this->numbering->next($invoice);
@@ -48,12 +52,59 @@ final class InvoiceIssuer
                 'status' => InvoiceStatus::Issued,
                 'issued_at' => now(),
                 'issued_by' => $user->id,
+                'ksef_error' => null,
             ])->save();
 
             $invoice->refreshTotals();
-
-            return $invoice;
         });
+
+        if ($invoice->kind->goesToKsef()) {
+            try {
+                $this->transmitter->send($invoice);
+            } catch (InvoiceException $exception) {
+                // Dokumentu nie ma w KSeF — wraca do szkicu, numer zostaje wolny.
+                $this->backToDraft($invoice, $exception->getMessage());
+
+                throw $exception;
+            }
+        }
+
+        return $invoice;
+    }
+
+    /**
+     * Ponowne pytanie KSeF o fakturę, która czekała na weryfikację.
+     *
+     * @throws InvoiceException
+     */
+    public function refreshKsefStatus(Invoice $invoice): Invoice
+    {
+        try {
+            $this->transmitter->refresh($invoice);
+        } catch (KsefRejectedException $exception) {
+            $this->backToDraft($invoice, $exception->getMessage());
+
+            throw $exception;
+        }
+
+        return $invoice;
+    }
+
+    private function backToDraft(Invoice $invoice, string $error): void
+    {
+        $invoice->forceFill([
+            'number' => null,
+            'status' => InvoiceStatus::Draft,
+            'issued_at' => null,
+            'issued_by' => null,
+            'ksef_status' => null,
+            'ksef_environment' => null,
+            'ksef_session' => null,
+            'ksef_reference' => null,
+            'ksef_sent_at' => null,
+            'ksef_error' => $error,
+            'xml' => null,
+        ])->save();
     }
 
     /**

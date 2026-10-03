@@ -18,7 +18,10 @@ use Illuminate\Support\Facades\Storage;
  */
 final class InvoicePdf implements Document
 {
-    public function __construct(private readonly Invoice $invoice) {}
+    public function __construct(
+        private readonly Invoice $invoice,
+        private readonly ?string $qrUrl = null,
+    ) {}
 
     public function view(): string
     {
@@ -54,6 +57,7 @@ final class InvoicePdf implements Document
 
         return [
             'invoice' => $invoice,
+            'qrUrl' => $this->qrUrl,
             't' => $this->translator(),
             'th' => $this->headerTranslator(),
             'money' => fn (BigDecimal|string|null $amount) => $format->number($amount ?? '0').' '.$invoice->currency,
