@@ -11,24 +11,50 @@
             </flux:sidebar.header>
 
             <flux:sidebar.nav>
-                <flux:sidebar.group :heading="__('Platform')" class="grid">
+                <flux:sidebar.group :heading="__('Work')" class="grid">
                     <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                         {{ __('Dashboard') }}
                     </flux:sidebar.item>
                 </flux:sidebar.group>
+
+                @canany(['manage-projects', 'manage-contractors'])
+                    <flux:sidebar.group :heading="__('Records')" class="grid">
+                        @can('manage-projects')
+                            <flux:sidebar.item icon="folder" :href="route('projects.index')" :current="request()->routeIs('projects.*')" wire:navigate>
+                                {{ __('Projects') }}
+                            </flux:sidebar.item>
+                        @endcan
+                        @can('manage-contractors')
+                            <flux:sidebar.item icon="building-office" :href="route('contractors.index')" :current="request()->routeIs('contractors.*')" wire:navigate>
+                                {{ __('Contractors') }}
+                            </flux:sidebar.item>
+                        @endcan
+                    </flux:sidebar.group>
+                @endcanany
+
+                @canany(['manage-users', 'manage-settings'])
+                    <flux:sidebar.group :heading="__('Administration')" class="grid">
+                        @can('manage-users')
+                            <flux:sidebar.item icon="users" :href="route('admin.users.index')" :current="request()->routeIs('admin.users.*')" wire:navigate>
+                                {{ __('Users') }}
+                            </flux:sidebar.item>
+                        @endcan
+                        @can('manage-settings')
+                            <flux:sidebar.item icon="building-storefront" :href="route('admin.company')" :current="request()->routeIs('admin.company')" wire:navigate>
+                                {{ __('Company') }}
+                            </flux:sidebar.item>
+                            <flux:sidebar.item icon="banknotes" :href="route('admin.bank-accounts')" :current="request()->routeIs('admin.bank-accounts')" wire:navigate>
+                                {{ __('Bank accounts') }}
+                            </flux:sidebar.item>
+                            <flux:sidebar.item icon="truck" :href="route('admin.vehicles')" :current="request()->routeIs('admin.vehicles')" wire:navigate>
+                                {{ __('Vehicles') }}
+                            </flux:sidebar.item>
+                        @endcan
+                    </flux:sidebar.group>
+                @endcanany
             </flux:sidebar.nav>
 
             <flux:spacer />
-
-            <flux:sidebar.nav>
-                <flux:sidebar.item icon="folder-git-2" href="https://github.com/laravel/livewire-starter-kit" target="_blank">
-                    {{ __('Repository') }}
-                </flux:sidebar.item>
-
-                <flux:sidebar.item icon="book-open-text" href="https://laravel.com/docs/starter-kits#livewire" target="_blank">
-                    {{ __('Documentation') }}
-                </flux:sidebar.item>
-            </flux:sidebar.nav>
 
             <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" />
         </flux:sidebar>

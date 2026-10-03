@@ -1,41 +1,43 @@
 <?php
 
-namespace Tests\Feature\Auth;
+use App\Enums\Role;
+use App\Models\User;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Laravel\Fortify\Features;
-use Tests\TestCase;
+test('registration is open while there are no users', function () {
+    $this->get(route('register'))->assertOk();
 
-class RegistrationTest extends TestCase
-{
-    use RefreshDatabase;
+    $this->get(route('login'))->assertSee('Create the administrator account');
+});
 
-    protected function setUp(): void
-    {
-        parent::setUp();
+test('the first registered user becomes a verified administrator', function () {
+    $this->post(route('register.store'), [
+        'name' => 'Adrian Sajnaga',
+        'email' => 'adrian@example.com',
+        'password' => 'password',
+        'password_confirmation' => 'password',
+    ])->assertSessionHasNoErrors()->assertRedirect(route('dashboard', absolute: false));
 
-        $this->skipUnlessFortifyHas(Features::registration());
-    }
+    $user = User::sole();
 
-    public function test_registration_screen_can_be_rendered(): void
-    {
-        $response = $this->get(route('register'));
+    expect($user->role)->toBe(Role::Admin)
+        ->and($user->hasVerifiedEmail())->toBeTrue();
 
-        $response->assertOk();
-    }
+    $this->assertAuthenticatedAs($user);
+});
 
-    public function test_new_users_can_register(): void
-    {
-        $response = $this->post(route('register.store'), [
-            'name' => 'John Doe',
-            'email' => 'test@example.com',
-            'password' => 'password',
-            'password_confirmation' => 'password',
-        ]);
+test('registration is closed once any account exists', function () {
+    User::factory()->admin()->create();
 
-        $response->assertSessionHasNoErrors()
-            ->assertRedirect(route('dashboard', absolute: false));
+    $this->get(route('register'))->assertNotFound();
 
-        $this->assertAuthenticated();
-    }
-}
+    $this->post(route('register.store'), [
+        'name' => 'Intruder',
+        'email' => 'intruder@example.com',
+        'password' => 'password',
+        'password_confirmation' => 'password',
+    ])->assertForbidden();
+
+    expect(User::count())->toBe(1);
+
+    $this->get(route('login'))->assertDontSee('Create the administrator account');
+});

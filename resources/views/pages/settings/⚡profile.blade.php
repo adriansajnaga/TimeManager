@@ -1,7 +1,9 @@
 <?php
 
 use App\Concerns\ProfileValidationRules;
+use App\Enums\Language;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Validation\Rule;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
@@ -14,6 +16,7 @@ new #[Title('Profile settings')] class extends Component {
 
     public string $name = '';
     public string $email = '';
+    public string $locale = 'pl';
 
     /**
      * Mount the component.
@@ -22,6 +25,7 @@ new #[Title('Profile settings')] class extends Component {
     {
         $this->name = Auth::user()->name;
         $this->email = Auth::user()->email;
+        $this->locale = Auth::user()->locale->value;
     }
 
     /**
@@ -31,7 +35,12 @@ new #[Title('Profile settings')] class extends Component {
     {
         $user = Auth::user();
 
-        $validated = $this->validate($this->profileRules($user->id));
+        $validated = $this->validate([
+            ...$this->profileRules($user->id),
+            'locale' => ['required', Rule::enum(Language::class)],
+        ]);
+
+        $localeChanged = $validated['locale'] !== $user->locale->value;
 
         $user->fill($validated);
 
@@ -40,6 +49,13 @@ new #[Title('Profile settings')] class extends Component {
         }
 
         $user->save();
+
+        if ($localeChanged) {
+            // Pełne przeładowanie, żeby cały interfejs przeszedł na nowy język.
+            $this->redirectRoute('profile.edit');
+
+            return;
+        }
 
         Flux::toast(variant: 'success', text: __('Profile updated.'));
     }
@@ -106,6 +122,12 @@ new #[Title('Profile settings')] class extends Component {
                     </div>
                 @endif
             </div>
+
+            <flux:select wire:model="locale" :label="__('Interface language')">
+                @foreach (Language::cases() as $case)
+                    <flux:select.option :value="$case->value">{{ $case->label() }}</flux:select.option>
+                @endforeach
+            </flux:select>
 
             <div class="flex items-center gap-4">
                 <div class="flex items-center justify-end">
