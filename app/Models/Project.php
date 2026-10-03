@@ -116,6 +116,16 @@ class Project extends Model
     }
 
     /**
+     * Faktury projektu ryczałtowego (zaliczki, transze, faktura końcowa).
+     *
+     * @return HasMany<Invoice, $this>
+     */
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class);
+    }
+
+    /**
      * @return HasMany<TimeEntry, $this>
      */
     public function timeEntries(): HasMany

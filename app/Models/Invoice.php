@@ -36,6 +36,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property InvoiceStatus $status
  * @property string|null $number
  * @property int|null $contractor_id
+ * @property int|null $project_id
  * @property array<string, string|null>|null $seller
  * @property array<string, string|null>|null $buyer
  * @property string|null $counterparty_name
@@ -80,7 +81,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property-read Collection<int, Invoice> $advances
  */
 #[Fillable([
-    'direction', 'kind', 'number', 'contractor_id', 'seller', 'buyer', 'counterparty_name', 'counterparty_tax_id',
+    'direction', 'kind', 'number', 'contractor_id', 'project_id', 'seller', 'buyer', 'counterparty_name', 'counterparty_tax_id',
     'issue_date', 'sale_date', 'due_date', 'issue_place', 'payment_method', 'bank_account', 'paid_on',
     'currency', 'exchange_rate', 'exchange_rate_date', 'exchange_rate_table', 'language',
     'advance_amount', 'corrected_invoice_id', 'corrected_number', 'corrected_issue_date', 'corrected_ksef_number',
@@ -209,6 +210,14 @@ class Invoice extends Model
     public function contractor(): BelongsTo
     {
         return $this->belongsTo(Contractor::class);
+    }
+
+    /**
+     * @return BelongsTo<Project, $this>
+     */
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
     }
 
     /**

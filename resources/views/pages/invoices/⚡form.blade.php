@@ -11,6 +11,8 @@ use App\Livewire\Forms\InvoiceForm;
 use App\Models\BankAccount;
 use App\Models\Contractor;
 use App\Models\Invoice;
+use App\Models\Project;
+use App\Enums\ProjectBillingType;
 use App\Services\Invoices\InvoiceException;
 use App\Services\Invoices\NbpExchangeRates;
 use App\Services\Invoices\VatSummary;
@@ -57,6 +59,10 @@ new class extends Component {
         }
 
         $this->form->setInvoice(null, $direction, $kind);
+
+        if ($request->integer('project') > 0) {
+            $this->form->applyProject(Project::query()->with('contractor')->findOrFail($request->integer('project')), $kind);
+        }
     }
 
     public function updated(string $property): void
@@ -64,6 +70,7 @@ new class extends Component {
         if ($property === 'form.contractor_id') {
             $this->form->applyContractor();
             $this->form->advance_ids = [];
+            $this->form->project_id = null;
         }
 
         if ($property === 'form.currency') {
@@ -145,6 +152,25 @@ new class extends Component {
             ->where(fn ($query) => $query->whereIn('type', $types)->where('is_active', true))
             ->when($this->form->contractor_id, fn ($query) => $query->orWhere('id', $this->form->contractor_id))
             ->orderBy('name')
+            ->get();
+    }
+
+    /**
+     * Projekty ryczałtowe nabywcy (do powiązania zaliczek i faktury końcowej).
+     *
+     * @return Collection<int, Project>
+     */
+    #[Computed]
+    public function projects(): Collection
+    {
+        if (! $this->form->contractor_id || $this->isPurchase()) {
+            return new Collection;
+        }
+
+        return Project::query()
+            ->where('contractor_id', $this->form->contractor_id)
+            ->where(fn ($query) => $query->where('billing_type', ProjectBillingType::Fixed)->when($this->form->project_id, fn ($query) => $query->orWhere('id', $this->form->project_id)))
+            ->orderBy('number')
             ->get();
     }
 
@@ -238,6 +264,15 @@ new class extends Component {
 
                 @if ($this->isPurchase())
                     <flux:input wire:model="form.number" :label="__('Invoice number')" required />
+                @endif
+
+                @if ($this->projects->isNotEmpty())
+                    <flux:select wire:model="form.project_id" :label="__('Fixed-price project')">
+                        <flux:select.option value="">{{ __('None') }}</flux:select.option>
+                        @foreach ($this->projects as $project)
+                            <flux:select.option :value="$project->id">{{ $project->fullName() }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
                 @endif
 
                 <flux:input wire:model.live.blur="form.issue_date" type="date" :label="__('Issue date')" required />

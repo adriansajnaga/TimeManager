@@ -106,7 +106,7 @@ new #[Title('Projects')] class extends Component {
             @forelse ($this->projects as $project)
                 <flux:table.row :key="$project->id">
                     <flux:table.cell variant="strong">
-                        <flux:link :href="route('projects.edit', $project)" wire:navigate>{{ $project->number }}</flux:link>
+                        <flux:link :href="route('projects.show', $project)" wire:navigate>{{ $project->number }}</flux:link>
                     </flux:table.cell>
                     <flux:table.cell class="max-w-72 truncate">
                         {{ $project->name }}

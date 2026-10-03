@@ -14,6 +14,7 @@ use App\Models\CompanySetting;
 use App\Models\Contractor;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Models\Project;
 use App\Services\Invoices\Parties;
 use App\Services\Invoices\VatSummary;
 use Carbon\CarbonImmutable;
@@ -32,6 +33,9 @@ class InvoiceForm extends Form
     public string $kind = 'vat';
 
     public ?string $contractor_id = null;
+
+    /** Projekt ryczałtowy (zaliczki i faktura końcowa). */
+    public ?string $project_id = null;
 
     /** Numer faktury zakupu (sprzedaż dostaje numer przy wystawieniu). */
     public string $number = '';
@@ -116,6 +120,7 @@ class InvoiceForm extends Form
             'direction' => $invoice->direction->value,
             'kind' => $invoice->kind->value,
             'contractor_id' => $invoice->contractor_id !== null ? (string) $invoice->contractor_id : null,
+            'project_id' => $invoice->project_id !== null ? (string) $invoice->project_id : null,
             'number' => (string) $invoice->number,
             'issue_date' => $invoice->issue_date->toDateString(),
             'sale_date' => (string) $invoice->sale_date?->toDateString(),
@@ -226,6 +231,41 @@ class InvoiceForm extends Form
         }
     }
 
+    /**
+     * Faktura projektu ryczałtowego: nabywca i pozycja z kartoteki projektu (wartość umowy).
+     * Rozliczeniowa (ROZ) od razu odlicza wystawione zaliczkowe tego projektu.
+     */
+    public function applyProject(Project $project, InvoiceKind $kind): void
+    {
+        $this->contractor_id = (string) $project->contractor_id;
+        $this->project_id = (string) $project->id;
+        $this->kind = $kind->value;
+        $this->applyContractor();
+
+        if (filled($project->contract_currency)) {
+            $this->currency = (string) $project->contract_currency;
+        }
+
+        $vatCode = $project->contractor->vat_code;
+
+        $this->items = [[
+            'name' => $project->fullName(),
+            'unit' => '',
+            'quantity' => '1',
+            'unit_price' => (string) ($project->contract_value ?? ''),
+            'vat_code' => $vatCode->value,
+        ]];
+
+        if ($kind === InvoiceKind::Final) {
+            $this->advance_ids = array_values($project->invoices()
+                ->where('kind', InvoiceKind::Advance)
+                ->where('status', InvoiceStatus::Issued)
+                ->pluck('id')
+                ->map(fn ($id) => (string) $id)
+                ->all());
+        }
+    }
+
     public function addItem(): void
     {
         $lastCode = $this->items === [] ? null : VatCode::tryFrom(end($this->items)['vat_code']);
@@ -279,6 +319,7 @@ class InvoiceForm extends Form
             'direction' => ['required', Rule::enum(InvoiceDirection::class)],
             'kind' => ['required', Rule::enum(InvoiceKind::class)],
             'contractor_id' => ['required', 'integer', 'exists:contractors,id'],
+            'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')->where('contractor_id', (int) $this->contractor_id)],
             'number' => [$purchase ? 'required' : 'nullable', 'string', 'max:100'],
             'issue_date' => ['required', 'date'],
             'sale_date' => ['nullable', 'date'],
@@ -337,6 +378,7 @@ class InvoiceForm extends Form
                 'direction' => $this->direction,
                 'kind' => $this->kind,
                 'contractor_id' => (int) $this->contractor_id,
+                'project_id' => $this->project_id ?: null,
                 'number' => $purchase ? trim($this->number) : $invoice->number,
                 'issue_date' => $this->issue_date,
                 'sale_date' => $this->nullable($this->sale_date),

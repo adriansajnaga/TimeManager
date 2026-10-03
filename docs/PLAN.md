@@ -61,7 +61,7 @@ plus moduł faktur (sprzedaż, zakupy z KSeF, korekty, zaliczki, proformy). Wła
 | 6 | KSeF (test): wysyłka, numeracja z KSeF, status, pobieranie sprzedaży i zakupów, walidacja XSD, kod QR | ✅ |
 | 7 | Kilometrówka, materiały, rozliczenia godzin → szkic faktury, pakiet PDF, test akceptacyjny 4/8/2026 | ✅ |
 | 8 | E-mail (SMTP z ustawień, szablony, logi) | ✅ |
-| 9 | Projekty ryczałtowe i transze, dashboard | ⏳ |
+| 9 | Projekty ryczałtowe i transze, dashboard | ✅ |
 | 10 | Instrukcja wdrożenia | ⏳ |
 
 ## Faza 2 — jak sprawdzić
@@ -77,6 +77,12 @@ plus moduł faktur (sprzedaż, zakupy z KSeF, korekty, zaliczki, proformy). Wła
 2. Czas pracy → KW 31: siatka projektów × dni, wpisy start/koniec/przerwa.
 3. Tygodnie → KW 32: opisy, materiały, PDF Montageauftrag, Stundennachweis, zamknij/otwórz.
 4. Tygodnie → zaznacz zamknięte części + klient → Stundenzettel (98,75 h × 38,00 € = 3.752,50 €).
+
+## Faza 9 — jak sprawdzić
+
+1. Projekty → numer projektu → karta: godziny (i ich wartość wg stawki klienta), materiał z raportów, faktury projektu.
+2. Projekt ryczałtowy (rozliczenie „ryczałt”, wartość umowy): „Faktura zaliczkowa” w dowolnym momencie (pozycja = projekt i wartość umowy, wpisujesz otrzymaną kwotę); po zmianie statusu na „Zamknięty” — „Faktura końcowa” (ROZ z odliczeniem wystawionych zaliczek albo VAT, gdy zaliczek nie było) i bilans godzin względem ryczałtu.
+3. Panel: moje godziny, tygodnie do zamknięcia, klienci gotowi do rozliczenia (z kwotą), niezapłacone faktury (po terminie), szkice i faktury czekające na KSeF, ostatnie faktury, projekty ryczałtowe (zafakturowano / wartość umowy).
 
 ## Faza 8 — jak sprawdzić
 

@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', fn () => redirect()->route('dashboard'))->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::view('dashboard', 'dashboard')->name('dashboard');
+    Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
 
     Route::middleware('can:log-own-time')->group(function () {
         Route::livewire('time', 'pages::time.week')->name('time.week');
@@ -37,6 +37,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('projects', 'pages::projects.index')->name('projects.index');
         Route::livewire('projects/create', 'pages::projects.form')->name('projects.create');
         Route::livewire('projects/{project}/edit', 'pages::projects.form')->name('projects.edit');
+        Route::livewire('projects/{project}', 'pages::projects.show')->name('projects.show');
     });
 
     Route::middleware('can:manage-invoices')->group(function () {
