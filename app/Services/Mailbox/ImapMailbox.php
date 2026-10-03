@@ -75,6 +75,9 @@ final class ImapMailbox implements Mailbox
                 );
             }
 
+            // Biblioteka zwraca stronę rosnąco — najnowsze (najwyższy UID) mają być na górze.
+            usort($messages, fn (MailSummary $a, MailSummary $b) => $b->uid <=> $a->uid);
+
             return ['messages' => $messages, 'total' => $total];
         });
     }

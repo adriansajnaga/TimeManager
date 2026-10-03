@@ -192,7 +192,12 @@ new class extends Component {
                 @endif
             </div>
             @if ($invoice->ksef_number)
-                <flux:text class="mt-1">{{ __('KSeF number') }}: <strong>{{ $invoice->ksef_number }}</strong></flux:text>
+                <flux:text class="mt-1">
+                    {{ __('KSeF number') }}: <strong>{{ $invoice->ksef_number }}</strong>
+                    @if ($verifyUrl = app(\App\Services\Ksef\InvoiceQrCode::class)->url($invoice))
+                        · <flux:link :href="$verifyUrl" target="_blank" rel="noopener">{{ __('Check in KSeF') }}</flux:link>
+                    @endif
+                </flux:text>
             @endif
             <flux:subheading>
                 <flux:link :href="route('invoices.index', ['direction' => $invoice->direction->value])" wire:navigate>

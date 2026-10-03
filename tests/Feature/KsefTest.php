@@ -414,3 +414,18 @@ test('the PDF of an invoice in KSeF shows its number and the verification code',
     $this->actingAs($this->admin)->get(route('invoices.pdf', $invoice))->assertOk();
     $this->actingAs($this->admin)->get(route('invoices.xml', $invoice))->assertOk()->assertHeader('Content-Type', 'application/xml; charset=utf-8');
 });
+
+test('an invoice in KSeF links to the KSeF verification page', function () {
+    $invoice = draftInvoice($this->client, [['100.00', '1', VatCode::Rate23]], ['number' => '1/9/2026', 'status' => InvoiceStatus::Issued]);
+    $invoice->forceFill([
+        'ksef_number' => '8792451081-20260915-ABCDEF123456-7A',
+        'ksef_status' => KsefStatus::Accepted,
+        'ksef_environment' => 'test',
+        'xml' => app(Fa3InvoiceBuilder::class)->build($invoice),
+    ])->save();
+
+    $this->actingAs($this->admin)
+        ->get(route('invoices.show', $invoice))
+        ->assertSee('Check in KSeF')
+        ->assertSee('https://qr-test.ksef.mf.gov.pl/invoice/8792451081/15-09-2026/', false);
+});
