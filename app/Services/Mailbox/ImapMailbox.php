@@ -9,6 +9,8 @@ use Webklex\PHPIMAP\Address;
 use Webklex\PHPIMAP\Attachment;
 use Webklex\PHPIMAP\Client;
 use Webklex\PHPIMAP\ClientManager;
+use Webklex\PHPIMAP\Connection\Protocols\ImapProtocol;
+use Webklex\PHPIMAP\Connection\Protocols\Response;
 use Webklex\PHPIMAP\Folder;
 use Webklex\PHPIMAP\Message;
 
@@ -156,8 +158,50 @@ final class ImapMailbox implements Mailbox
                 throw new MailboxException(__('The mailbox has no Sent folder.'));
             }
 
-            $this->folder($path)->appendMessage($rawMessage, ['\\Seen'], now());
+            $this->append($this->folder($path)->path, $rawMessage);
         });
+    }
+
+    /**
+     * APPEND napisany ręcznie: biblioteka oczekuje „+” zaraz po komendzie i nie pokazuje odpowiedzi
+     * serwera („failed to send literal string”). Tu pomijamy linie nieoznaczone i zwracamy treść odmowy.
+     */
+    private function append(string $path, string $rawMessage): void
+    {
+        $connection = $this->client()->getConnection();
+
+        if (! $connection instanceof ImapProtocol) {
+            throw new MailboxException(__('Mail server error: :message', ['message' => 'IMAP']));
+        }
+
+        $response = new Response(0);
+        $tag = 'TMA'.random_int(1000, 9999);
+        $quotedPath = '"'.str_replace(['\\', '"'], ['\\\\', '\\"'], $path).'"';
+
+        $connection->write($response, $tag.' APPEND '.$quotedPath.' (\\Seen) {'.strlen($rawMessage).'}');
+
+        do {
+            $line = trim($connection->nextLine($response));
+        } while (str_starts_with($line, '* '));
+
+        if (! str_starts_with($line, '+')) {
+            throw new MailboxException(__('Mail server error: :message', ['message' => $this->stripTag($line, $tag)]));
+        }
+
+        $connection->write($response, $rawMessage);
+
+        do {
+            $line = trim($connection->nextLine($response));
+        } while (! str_starts_with($line, $tag.' '));
+
+        if (! str_starts_with($line, $tag.' OK')) {
+            throw new MailboxException(__('Mail server error: :message', ['message' => $this->stripTag($line, $tag)]));
+        }
+    }
+
+    private function stripTag(string $line, string $tag): string
+    {
+        return str_starts_with($line, $tag.' ') ? substr($line, strlen($tag) + 1) : $line;
     }
 
     public function ping(): void
