@@ -12,6 +12,14 @@ final class MailFolder
     ) {}
 
     /**
+     * Folder wysłanych po nazwie (Sent, Sent Items, Wysłane, Gesendet…), także jako INBOX.Sent.
+     */
+    public static function looksLikeSent(string $path): bool
+    {
+        return preg_match('/(^|[.\/])(sent( items| messages| mail)?|wys(ł|l)ane|elementy wys(ł|l)ane|gesendet|gesendete (elemente|objekte))$/iu', $path) === 1;
+    }
+
+    /**
      * Kosz rozpoznajemy po nazwie (Trash, Deleted, Kosz, Papierkorb).
      */
     public static function looksLikeTrash(string $path): bool

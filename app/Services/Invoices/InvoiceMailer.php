@@ -12,7 +12,9 @@ use App\Models\EmailLog;
 use App\Models\Invoice;
 use App\Models\MailSetting;
 use App\Models\User;
+use App\Services\Mailbox\Mailbox;
 use App\Support\DefaultTemplates;
+use Illuminate\Mail\SentMessage;
 use Illuminate\Support\Facades\Mail;
 use Throwable;
 
@@ -91,7 +93,7 @@ final class InvoiceMailer
 
             self::useSettings($settings);
 
-            Mail::mailer(self::MAILER)
+            $sent = Mail::mailer(self::MAILER)
                 ->to($to)
                 ->cc($cc)
                 ->bcc(array_filter([$settings->bcc]))
@@ -106,7 +108,25 @@ final class InvoiceMailer
         $log->forceFill(['sent_at' => now()])->save();
         $invoice->forceFill(['emailed_at' => now()])->save();
 
+        self::saveToSent($sent ?? null, $settings);
+
         return $log;
+    }
+
+    /**
+     * Kopia wysłanej wiadomości w folderze Wysłane skrzynki (IMAP). Błąd zapisu nie cofa wysyłki.
+     */
+    public static function saveToSent(?SentMessage $sent, MailSetting $settings): void
+    {
+        if ($sent === null || ! $settings->hasMailbox()) {
+            return;
+        }
+
+        try {
+            app(Mailbox::class)->appendToSent($sent->toString());
+        } catch (Throwable $exception) {
+            report($exception);
+        }
     }
 
     /**

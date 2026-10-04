@@ -147,6 +147,19 @@ final class ImapMailbox implements Mailbox
         });
     }
 
+    public function appendToSent(string $rawMessage): void
+    {
+        $this->guard(function () use ($rawMessage) {
+            $path = filled($this->settings->sent_folder) ? (string) $this->settings->sent_folder : $this->sentPath();
+
+            if ($path === null) {
+                throw new MailboxException(__('The mailbox has no Sent folder.'));
+            }
+
+            $this->folder($path)->appendMessage($rawMessage, ['\\Seen'], now());
+        });
+    }
+
     public function ping(): void
     {
         $this->guard(fn () => $this->client()->getFolders(false));
@@ -186,6 +199,18 @@ final class ImapMailbox implements Mailbox
         return $folder;
     }
 
+    private function sentPath(): ?string
+    {
+        foreach ($this->client()->getFolders(false) as $folder) {
+            /** @var Folder $folder */
+            if (MailFolder::looksLikeSent($folder->path)) {
+                return $folder->path;
+            }
+        }
+
+        return null;
+    }
+
     private function trashPath(): ?string
     {
         foreach ($this->client()->getFolders(false) as $folder) {
@@ -218,7 +243,7 @@ final class ImapMailbox implements Mailbox
 
         return match (true) {
             strtoupper($folder->path) === 'INBOX' => __('Inbox'),
-            in_array($leaf, ['sent', 'sent items', 'sent messages'], true) => __('Sent'),
+            MailFolder::looksLikeSent($folder->path) => __('Sent'),
             in_array($leaf, ['drafts'], true) => __('Drafts'),
             in_array($leaf, ['junk', 'spam'], true) => __('Spam'),
             in_array($leaf, ['archive'], true) => __('Archive folder'),

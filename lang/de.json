@@ -893,6 +893,7 @@
     "The invoice XML does not match the FA(3) schema: :errors": "Das Rechnungs-XML entspricht nicht dem Schema FA(3): :errors",
     "The KSeF certificate does not contain an RSA key.": "Das KSeF-Zertifikat enthält keinen RSA-Schlüssel.",
     "The KSeF document has no invoice number (P_2).": "Das KSeF-Dokument hat keine Rechnungsnummer (P_2).",
+    "The mailbox has no Sent folder.": "Das Postfach hat keinen Ordner „Gesendet“.",
     "The mailbox works.": "Das Postfach funktioniert.",
     "The NBP service returned an error (:status). Enter the rate manually.": "Der NBP-Dienst meldet einen Fehler (:status). Kurs manuell eingeben.",
     "The NIP must consist of 10 digits.": "Die NIP muss aus 10 Ziffern bestehen.",

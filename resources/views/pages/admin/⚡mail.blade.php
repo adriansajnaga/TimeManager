@@ -98,7 +98,7 @@ new #[Title('E-mail')] class extends Component {
         try {
             InvoiceMailer::useSettings($settings);
 
-            Mail::mailer(InvoiceMailer::MAILER)->raw(
+            $sent = Mail::mailer(InvoiceMailer::MAILER)->raw(
                 __('Test message from :app. The e-mail server settings work.', ['app' => config('app.name')]),
                 fn (Message $message) => $message
                     ->to($recipient)
@@ -110,6 +110,8 @@ new #[Title('E-mail')] class extends Component {
 
             return;
         }
+
+        InvoiceMailer::saveToSent($sent, $settings);
 
         $settings->forceFill(['verified_at' => now()])->save();
         $this->fillFrom($settings);

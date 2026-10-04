@@ -50,6 +50,13 @@ interface Mailbox
     public function delete(string $folder, int $uid): bool;
 
     /**
+     * Zapisuje kopię wysłanej wiadomości (surowy MIME) w folderze Wysłane, jako przeczytaną.
+     *
+     * @throws MailboxException
+     */
+    public function appendToSent(string $rawMessage): void;
+
+    /**
      * Sprawdza logowanie (test połączenia).
      *
      * @throws MailboxException

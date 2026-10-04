@@ -2,6 +2,7 @@
 
 use App\Models\MailSetting;
 use App\Models\User;
+use App\Services\Invoices\InvoiceMailer;
 use App\Services\Mailbox\ImapMailbox;
 use App\Services\Mailbox\MailAttachment;
 use App\Services\Mailbox\Mailbox;
@@ -12,7 +13,10 @@ use App\Services\Mailbox\MailMessage;
 use App\Services\Mailbox\MailSummary;
 use App\Services\Mailbox\MailView;
 use Carbon\CarbonImmutable;
+use Illuminate\Mail\SentMessage;
 use Livewire\Livewire;
+use Symfony\Component\Mailer\Envelope;
+use Symfony\Component\Mime\Email;
 
 /**
  * Skrzynka w pamięci zamiast serwera IMAP.
@@ -32,6 +36,14 @@ function fakeMailbox(?string $failWith = null): object
         public function setSeen(string $folder, int $uid, bool $seen): void
         {
             $this->seenCalls[] = [$folder, $uid, $seen];
+        }
+
+        /** @var list<string> */
+        public array $appended = [];
+
+        public function appendToSent(string $rawMessage): void
+        {
+            $this->appended[] = $rawMessage;
         }
 
         public function delete(string $folder, int $uid): bool
@@ -230,4 +242,24 @@ test('the IMAP mailbox needs a server and credentials', function () {
         ->assertHasNoErrors();
 
     expect(MailSetting::current()->imap_host)->toBe('mail.ascomm.test');
+});
+
+test('sent e-mails are saved to the Sent folder of the mailbox', function () {
+    $fake = fakeMailbox();
+    $settings = MailSetting::query()->create([
+        'host' => 'mail.ascomm.test', 'from_address' => 'faktury@ascomm.test',
+        'username' => 'faktury@ascomm.test', 'password' => 'secret', 'imap_host' => 'mail.ascomm.test',
+    ]);
+
+    $email = (new Email)->from('faktury@ascomm.test')->to('kunde@example.test')->subject('Rechnung 4/9/2026')->text('Anbei');
+    $sent = new SentMessage(new Symfony\Component\Mailer\SentMessage($email, Envelope::create($email)));
+
+    InvoiceMailer::saveToSent($sent, $settings);
+
+    expect($fake->appended)->toHaveCount(1)
+        ->and($fake->appended[0])->toContain('Subject: Rechnung 4/9/2026');
+
+    expect(MailFolder::looksLikeSent('INBOX.Sent'))->toBeTrue()
+        ->and(MailFolder::looksLikeSent('Wysłane'))->toBeTrue()
+        ->and(MailFolder::looksLikeSent('INBOX'))->toBeFalse();
 });
