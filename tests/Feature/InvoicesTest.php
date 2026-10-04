@@ -394,3 +394,20 @@ test('VAT in PLN is required for foreign currency invoices with VAT', function (
     expect(app(InvoiceIssuer::class)->problems($invoice))->toBe([])
         ->and((string) $invoice->toPln(BigDecimal::of('23.00')))->toBe('97.89');
 });
+
+test('the payment date can be entered', function () {
+    $invoice = Invoice::factory()->withItem()->issued('6/9/2026')->create();
+
+    Livewire::actingAs($this->admin)
+        ->test('pages::invoices.show', ['invoice' => $invoice])
+        ->call('choosePaymentDate')
+        ->assertSet('paidOn', today()->toDateString())
+        ->set('paidOn', today()->addDay()->toDateString())
+        ->call('savePaymentDate')
+        ->assertHasErrors('paidOn')
+        ->set('paidOn', '2026-09-12')
+        ->call('savePaymentDate')
+        ->assertHasNoErrors();
+
+    expect($invoice->fresh()->paid_on?->toDateString())->toBe('2026-09-12');
+});

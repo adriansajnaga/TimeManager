@@ -147,6 +147,30 @@ new class extends Component {
         $this->invoice->forceFill(['paid_on' => $paid ? today() : null])->save();
     }
 
+    /** Data zapłaty wpisywana w okienku „Zapłacona w dniu…”. */
+    public string $paidOn = '';
+
+    public function choosePaymentDate(): void
+    {
+        $this->paidOn = ($this->invoice->paid_on ?? today())->toDateString();
+        $this->resetErrorBag('paidOn');
+
+        Flux::modal('payment-date')->show();
+    }
+
+    public function savePaymentDate(): void
+    {
+        $this->authorize('manage-invoices');
+        abort_if($this->invoice->isDraft(), 403);
+
+        $this->validate(['paidOn' => ['required', 'date', 'before_or_equal:today']], attributes: ['paidOn' => __('Paid on')]);
+
+        $this->invoice->forceFill(['paid_on' => $this->paidOn])->save();
+
+        Flux::modal('payment-date')->close();
+        Flux::toast(variant: 'success', text: __('Payment saved: :date', ['date' => $this->invoice->paid_on?->format('d.m.Y')]));
+    }
+
     /**
      * Braki szkicu pokazywane przed wystawieniem.
      *
@@ -247,6 +271,7 @@ new class extends Component {
                     @endif
 
                     @if ($invoice->isIssued())
+                        <flux:menu.item icon="calendar-days" wire:click="choosePaymentDate">{{ $invoice->isPaid() ? __('Change payment date…') : __('Paid on date…') }}</flux:menu.item>
                         @if ($invoice->isPaid())
                             <flux:menu.item icon="x-circle" wire:click="markPaid(false)">{{ __('Mark as unpaid') }}</flux:menu.item>
                         @else
@@ -468,6 +493,19 @@ new class extends Component {
             @endforeach
         </flux:card>
     @endif
+
+    <flux:modal name="payment-date" class="md:w-[24rem]">
+        <form wire:submit="savePaymentDate" class="space-y-5">
+            <flux:heading size="lg">{{ __('Payment date') }}</flux:heading>
+            <flux:input wire:model="paidOn" type="date" :label="__('Paid on')" :max="today()->toDateString()" />
+            <div class="flex justify-end gap-2">
+                <flux:modal.close>
+                    <flux:button variant="ghost">{{ __('Cancel') }}</flux:button>
+                </flux:modal.close>
+                <flux:button variant="primary" type="submit">{{ __('Save') }}</flux:button>
+            </div>
+        </form>
+    </flux:modal>
 
     <flux:modal name="invoice-email" class="md:w-[40rem]">
         <form wire:submit="sendEmail" class="space-y-5">
