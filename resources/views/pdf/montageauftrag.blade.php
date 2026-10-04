@@ -1,7 +1,4 @@
-{{-- Montageauftrag bez logo (na życzenie) — sam nagłówek z danymi firmy. --}}
-@include('pdf.partials.company-header', ['companyLogo' => null])
-
-<div class="spacer"></div>
+{{-- Montageauftrag bez nagłówka firmy i stopki — ASCOMM jest w polu Auftraggeber/Auftragnehmer. --}}
 <h1>{{ $t('montageauftrag') }}</h1>
 <div class="spacer"></div>
 

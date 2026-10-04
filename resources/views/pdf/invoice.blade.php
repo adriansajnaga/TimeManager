@@ -93,29 +93,29 @@
     <p>{{ $t('correction_reason') }}: {{ $invoice->correction_reason }}</p>
 
     <p class="section">{{ $t('before_correction') }}</p>
-    @include('pdf.partials.invoice-items', ['items' => $beforeRows])
-    @include('pdf.partials.invoice-vat', ['vatSummary' => $beforeSummary])
+    @include('pdf.partials.invoice-items', ['items' => $beforeRows, 'summary' => $beforeSummary])
 
     <p class="section">{{ $t('after_correction') }}</p>
 @elseif ($kind === InvoiceKind::Advance || $kind === InvoiceKind::Final)
     <p class="section">{{ $t('order') }}</p>
 @endif
 
-{{-- Pozycje --}}
+{{-- Pozycje z zestawieniem VAT w tej samej tabeli (kolumny kwot dokładnie pod sobą) --}}
 <div style="margin-top: 3mm;">
-    @include('pdf.partials.invoice-items', ['items' => $rows])
+    @include('pdf.partials.invoice-items', match ($kind) {
+        InvoiceKind::Correction => ['items' => $rows, 'summary' => $orderSummary],
+        InvoiceKind::Advance, InvoiceKind::Final => ['items' => $rows, 'summary' => $orderSummary, 'caption' => $t('order_value')],
+        default => ['items' => $rows, 'summary' => $summary],
+    })
 </div>
 
 @if ($kind === InvoiceKind::Correction)
-    @include('pdf.partials.invoice-vat', ['vatSummary' => $orderSummary])
     <p class="section">{{ $t('difference') }}</p>
     @include('pdf.partials.invoice-vat', ['vatSummary' => $summary])
 @elseif ($kind === InvoiceKind::Advance)
-    @include('pdf.partials.invoice-vat', ['vatSummary' => $orderSummary, 'caption' => $t('order_value')])
     <p class="section">{{ $t('advance_received') }}</p>
     @include('pdf.partials.invoice-vat', ['vatSummary' => $summary])
 @elseif ($kind === InvoiceKind::Final)
-    @include('pdf.partials.invoice-vat', ['vatSummary' => $orderSummary, 'caption' => $t('order_value')])
     <p class="section">{{ $t('advances') }}</p>
     <table class="data">
         @foreach ($invoice->advances as $advance)
@@ -126,8 +126,6 @@
         @endforeach
     </table>
     <p class="section">{{ $t('remaining') }}</p>
-    @include('pdf.partials.invoice-vat', ['vatSummary' => $summary])
-@else
     @include('pdf.partials.invoice-vat', ['vatSummary' => $summary])
 @endif
 

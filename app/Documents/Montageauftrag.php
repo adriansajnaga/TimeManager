@@ -9,7 +9,7 @@ use App\Models\WeeklyReport;
 /**
  * Montageauftrag — jeden na projekt na część tygodnia w miesiącu (układ jak w starej aplikacji).
  */
-final class Montageauftrag extends WorkDocument
+final class Montageauftrag extends WorkDocument implements WithoutFooter
 {
     /** Minimalna liczba wierszy w każdej z dwóch tabel materiałów. */
     private const MATERIAL_ROWS = 5;

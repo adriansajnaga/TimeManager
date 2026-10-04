@@ -33,10 +33,13 @@ table.grid tr.strong td { font-weight: bold; }
 .inv table.data th, .inv table.data td { border: 0.2mm solid #999; padding: 1mm 1.5mm; vertical-align: top; }
 .inv table.data th { background-color: #f1f1f1; font-size: 7pt; font-weight: bold; text-align: center; vertical-align: middle; }
 .inv table.data td.num { text-align: center; white-space: nowrap; }
-/* Pozycje faktury nieco mniejszą czcionką. */
+/* Pozycje faktury nieco mniejszą czcionką; wiersze zestawienia VAT — zwykłą. */
 .inv table.items td { font-size: 7.5pt; }
+.inv table.items tr.sum td { font-size: 8pt; }
 .inv table.data td.ctr { text-align: center; }
 .inv table.data tr.total td { font-weight: bold; background-color: #f1f1f1; }
+/* Pusta komórka z lewej strony zestawienia VAT — bez ramki i tła. */
+.inv table.data td.blank, .inv table.data tr.total td.blank { border: none; background-color: transparent; }
 .inv .due { font-size: 11pt; font-weight: bold; }
 .inv .section { font-weight: bold; margin: 3mm 0 1mm 0; }
 .inv .note { font-size: 7.5pt; color: #333; margin-top: 1.5mm; }

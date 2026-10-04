@@ -47,12 +47,17 @@ final class PdfRenderer
         $mpdf->SetCreator((string) config('app.name'));
 
         $mpdf->WriteHTML(view('pdf.partials.styles')->render(), HTMLParserMode::HEADER_CSS);
-        $mpdf->SetHTMLFooter(view('pdf.partials.footer', ['company' => $company])->render());
+        $footer = view('pdf.partials.footer', ['company' => $company])->render();
 
         foreach ($documents as $index => $document) {
+            // Stopka dokumentu ustawiana przed jego pierwszą stroną (Montageauftrag — bez stopki).
+            $documentFooter = $document instanceof WithoutFooter ? '' : $footer;
+
             if ($index > 0) {
                 $mpdf->AddPage($document->orientation());
             }
+
+            $mpdf->SetHTMLFooter($documentFooter);
 
             $mpdf->WriteHTML(view($document->view(), $document->data())->render(), HTMLParserMode::HTML_BODY);
         }
