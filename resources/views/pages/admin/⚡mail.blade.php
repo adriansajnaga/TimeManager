@@ -111,12 +111,16 @@ new #[Title('E-mail')] class extends Component {
             return;
         }
 
-        InvoiceMailer::saveToSent($sent, $settings);
+        $sentCopyError = InvoiceMailer::saveToSent($sent, $settings);
 
         $settings->forceFill(['verified_at' => now()])->save();
         $this->fillFrom($settings);
 
         Flux::toast(variant: 'success', text: __('Test message sent to :email.', ['email' => $recipient]));
+
+        if ($sentCopyError !== null) {
+            $this->addError('test', __('The copy was not saved in Sent: :message', ['message' => $sentCopyError]));
+        }
     }
 
     public function testMailbox(): void

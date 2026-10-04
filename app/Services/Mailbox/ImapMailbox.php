@@ -41,7 +41,7 @@ final class ImapMailbox implements Mailbox
                     $unseen = null;
                 }
 
-                $folders[] = new MailFolder($folder->path, $this->folderName($folder), $unseen, MailFolder::looksLikeTrash($folder->path));
+                $folders[] = new MailFolder($folder->path, $this->folderName($folder), $unseen, $this->isTrash($folder));
             }
 
             usort($folders, fn (MailFolder $a, MailFolder $b) => [strtoupper($a->path) !== 'INBOX', $a->isTrash, $a->name] <=> [strtoupper($b->path) !== 'INBOX', $b->isTrash, $b->name]);
@@ -190,7 +190,8 @@ final class ImapMailbox implements Mailbox
 
     private function folder(string $path): Folder
     {
-        $folder = $this->client()->getFolderByPath($path);
+        // Ścieżki mamy z serwera (już w UTF-7 IMAP, np. „INBOX.Wys&AUI-ane”) — bez ponownego kodowania.
+        $folder = $this->client()->getFolderByPath($path, utf7: true);
 
         if ($folder === null) {
             throw new MailboxException(__('The folder :folder does not exist.', ['folder' => $path]));
@@ -203,7 +204,7 @@ final class ImapMailbox implements Mailbox
     {
         foreach ($this->client()->getFolders(false) as $folder) {
             /** @var Folder $folder */
-            if (MailFolder::looksLikeSent($folder->path)) {
+            if ($this->isSent($folder)) {
                 return $folder->path;
             }
         }
@@ -215,7 +216,7 @@ final class ImapMailbox implements Mailbox
     {
         foreach ($this->client()->getFolders(false) as $folder) {
             /** @var Folder $folder */
-            if (MailFolder::looksLikeTrash($folder->path)) {
+            if ($this->isTrash($folder)) {
                 return $folder->path;
             }
         }
@@ -243,13 +244,26 @@ final class ImapMailbox implements Mailbox
 
         return match (true) {
             strtoupper($folder->path) === 'INBOX' => __('Inbox'),
-            MailFolder::looksLikeSent($folder->path) => __('Sent'),
+            $this->isSent($folder) => __('Sent'),
             in_array($leaf, ['drafts'], true) => __('Drafts'),
             in_array($leaf, ['junk', 'spam'], true) => __('Spam'),
             in_array($leaf, ['archive'], true) => __('Archive folder'),
-            MailFolder::looksLikeTrash($folder->path) => __('Trash'),
+            $this->isTrash($folder) => __('Trash'),
             default => MailHeader::decode($folder->name),
         };
+    }
+
+    /**
+     * Po nazwie odkodowanej z UTF-7 IMAP — „Wysłane” leży na serwerze jako „Wys&AUI-ane”.
+     */
+    private function isSent(Folder $folder): bool
+    {
+        return MailFolder::looksLikeSent($folder->path) || MailFolder::looksLikeSent($folder->full_name);
+    }
+
+    private function isTrash(Folder $folder): bool
+    {
+        return MailFolder::looksLikeTrash($folder->path) || MailFolder::looksLikeTrash($folder->full_name);
     }
 
     private function subject(Message $message): string

@@ -272,6 +272,7 @@
     "Duplicate :name": "Duplikuj :name",
     "E-mail": "E-mail",
     "E-mail sent to :to.": "E-mail wysłany do :to.",
+    "The copy was not saved in Sent: :message": "Kopia nie została zapisana w Wysłanych: :message",
     "E-mail settings": "Ustawienia poczty",
     "E-mail settings saved.": "Ustawienia poczty zapisane.",
     "E-mail with invoice": "E-mail z fakturą",

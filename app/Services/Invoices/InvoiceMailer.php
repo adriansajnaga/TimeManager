@@ -26,6 +26,9 @@ final class InvoiceMailer
 {
     public const MAILER = 'tm_smtp';
 
+    /** Błąd zapisu kopii w Wysłanych przy ostatniej wysyłce (wysyłka sama się udała). */
+    public ?string $sentCopyError = null;
+
     public function __construct(
         private readonly SettlementPackage $package,
         private readonly PdfRenderer $renderer,
@@ -108,25 +111,30 @@ final class InvoiceMailer
         $log->forceFill(['sent_at' => now()])->save();
         $invoice->forceFill(['emailed_at' => now()])->save();
 
-        self::saveToSent($sent ?? null, $settings);
+        $this->sentCopyError = self::saveToSent($sent ?? null, $settings);
 
         return $log;
     }
 
     /**
-     * Kopia wysłanej wiadomości w folderze Wysłane skrzynki (IMAP). Błąd zapisu nie cofa wysyłki.
+     * Kopia wysłanej wiadomości w folderze Wysłane skrzynki (IMAP). Błąd zapisu nie cofa wysyłki
+     * — zwracamy go, żeby pokazać użytkownikowi.
      */
-    public static function saveToSent(?SentMessage $sent, MailSetting $settings): void
+    public static function saveToSent(?SentMessage $sent, MailSetting $settings): ?string
     {
         if ($sent === null || ! $settings->hasMailbox()) {
-            return;
+            return null;
         }
 
         try {
             app(Mailbox::class)->appendToSent($sent->toString());
         } catch (Throwable $exception) {
             report($exception);
+
+            return $exception->getMessage();
         }
+
+        return null;
     }
 
     /**

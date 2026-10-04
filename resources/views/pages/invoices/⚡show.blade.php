@@ -120,6 +120,10 @@ new class extends Component {
 
         Flux::modal('invoice-email')->close();
         Flux::toast(variant: 'success', text: __('E-mail sent to :to.', ['to' => $this->mailTo]));
+
+        if ($mailer->sentCopyError !== null) {
+            Flux::toast(variant: 'warning', duration: 0, text: __('The copy was not saved in Sent: :message', ['message' => $mailer->sentCopyError]));
+        }
     }
 
     public function refreshKsef(InvoiceIssuer $issuer): void

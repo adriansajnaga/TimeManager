@@ -272,6 +272,7 @@
     "Duplicate :name": ":name duplizieren",
     "E-mail": "E-Mail",
     "E-mail sent to :to.": "E-Mail an :to gesendet.",
+    "The copy was not saved in Sent: :message": "Die Kopie wurde nicht unter Gesendet gespeichert: :message",
     "E-mail settings": "E-Mail-Einstellungen",
     "E-mail settings saved.": "E-Mail-Einstellungen gespeichert.",
     "E-mail with invoice": "E-Mail mit Rechnung",
