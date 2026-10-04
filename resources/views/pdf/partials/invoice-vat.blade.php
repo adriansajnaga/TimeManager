@@ -1,9 +1,9 @@
-{{-- Zestawienie według stawek VAT z wierszem „Razem”. Kolumny Netto | Kwota VAT | Brutto mają
+{{-- Zestawienie według stawek VAT z wierszem „Razem”. Kolumny Netto | Kwota VAT | Brutto mają (Stawka VAT dowolnie szeroka)
      szerokości kolumn Cena netto | VAT | Wartość netto z tabeli pozycji (invoice-items), więc leżą dokładnie pod nimi. --}}
 <table class="data" style="margin-top: 2mm;">
     <tr>
-        <td class="blank small" style="width: 49%;"></td>
-        <th style="width: 9%;">{!! $th('vat_rate') !!}</th>
+        <td class="blank small" style="width: 40%;"></td>
+        <th style="width: 18%;">{!! $th('vat_rate') !!}</th>
         <th style="width: 14%;">{!! $th('net') !!}</th>
         <th style="width: 13%;">{!! $th('vat_amount') !!}</th>
         <th style="width: 15%;">{!! $th('gross') !!}</th>

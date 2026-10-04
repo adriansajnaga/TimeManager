@@ -1,6 +1,5 @@
 {{-- Pozycje faktury: Lp., nazwa, ilość, j.m., cena netto, VAT, wartość netto.
-     Zestawienie VAT ($summary) jest dolnymi wierszami tej samej tabeli, więc Netto | Kwota VAT | Brutto
-     leżą dokładnie pod Cena netto | VAT | Wartość netto. --}}
+     Szerokości kolumn zgrane z zestawieniem VAT (invoice-vat): Netto | Kwota VAT | Brutto pod Cena netto | VAT | Wartość netto. --}}
 <table class="data items">
     <tr>
         <th style="width: 6%;">{!! $th('position') !!}</th>
@@ -22,28 +21,4 @@
             <td class="num">{{ $money($item->net) }}</td>
         </tr>
     @endforeach
-
-    @isset($summary)
-        <tr class="sum">
-            <td class="blank small" colspan="3" rowspan="{{ count($summary->rows()) + 2 }}" style="vertical-align: top; padding-top: 2mm;">{{ $caption ?? '' }}</td>
-            <th>{!! $th('vat_rate') !!}</th>
-            <th>{!! $th('net') !!}</th>
-            <th>{!! $th('vat_amount') !!}</th>
-            <th>{!! $th('gross') !!}</th>
-        </tr>
-        @foreach ($summary->rows() as $row)
-            <tr class="sum">
-                <td class="ctr">{{ $row['code']->shortLabel() }}</td>
-                <td class="num">{{ $money($row['net']) }}</td>
-                <td class="num">{{ $row['code']->percent() === null ? '—' : $money($row['vat']) }}</td>
-                <td class="num">{{ $money($row['gross']) }}</td>
-            </tr>
-        @endforeach
-        <tr class="sum total">
-            <td class="ctr">{{ $t('total') }}</td>
-            <td class="num">{{ $money($summary->net()) }}</td>
-            <td class="num">{{ $money($summary->vat()) }}</td>
-            <td class="num">{{ $money($summary->gross()) }}</td>
-        </tr>
-    @endisset
 </table>
