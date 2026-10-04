@@ -202,7 +202,7 @@ final class SettlementService
                 ]);
             }
         } else {
-            $invoice->items()->create(['position' => 1, 'name' => $description, 'quantity' => '1', 'unit_price' => (string) $preview->total(), 'vat_code' => $vatCode]);
+            $invoice->items()->create(['position' => 1, 'name' => $description, 'unit' => 'szt.', 'quantity' => '1', 'unit_price' => (string) $preview->total(), 'vat_code' => $vatCode]);
         }
 
         $invoice->refreshTotals();

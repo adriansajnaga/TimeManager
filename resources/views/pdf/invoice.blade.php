@@ -70,7 +70,6 @@
             <th style="width: 18%;">{!! $th('payment_method') !!}</th>
             <th style="width: 16%;">{!! $th('due_date') !!}</th>
             <th>{!! $th('bank_account') !!}</th>
-            <th style="width: 20%;">{!! $th($due->isNegative() ? 'amount_refund' : 'amount_due') !!}</th>
         </tr>
         <tr>
             <td class="ctr">{{ $t('payment.'.$invoice->payment_method->value) }}</td>
@@ -82,7 +81,6 @@
                     —
                 @endif
             </td>
-            <td class="num bold">{{ $money($due->abs()) }}</td>
         </tr>
     </table>
 @endif

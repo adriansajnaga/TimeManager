@@ -250,7 +250,7 @@ class InvoiceForm extends Form
 
         $this->items = [[
             'name' => $project->fullName(),
-            'unit' => '',
+            'unit' => 'szt.',
             'quantity' => '1',
             'unit_price' => (string) ($project->contract_value ?? ''),
             'vat_code' => $vatCode->value,
@@ -445,7 +445,7 @@ class InvoiceForm extends Form
      */
     private function emptyItem(VatCode $vatCode): array
     {
-        return ['name' => '', 'unit' => '', 'quantity' => '1', 'unit_price' => '', 'vat_code' => $vatCode->value];
+        return ['name' => '', 'unit' => 'szt.', 'quantity' => '1', 'unit_price' => '', 'vat_code' => $vatCode->value];
     }
 
     /**
