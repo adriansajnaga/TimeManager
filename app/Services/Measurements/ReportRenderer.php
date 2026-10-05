@@ -28,6 +28,8 @@ final class ReportRenderer
 
     public function render(MeasurementProtocol $protocol): string
     {
+        // Świeży odczyt: domyślne wartości kolumn (UL, ta) i aktualne wyniki.
+        $protocol->refresh();
         $protocol->load([
             'contractor', 'instrument.attachments', 'performers.attachments', 'inspections', 'attachments',
             'boards.rcds', 'boards.circuits.points', 'boards.circuits.rcd', 'earthings', 'continuities', 'cableTests',

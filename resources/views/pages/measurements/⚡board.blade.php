@@ -23,6 +23,9 @@ new class extends Component {
     /** Rozwinięty obwód (pozostałe pokazują jedną linię podsumowania). */
     public ?int $open = null;
 
+    /** Rozwinięty RCD (pozostałe — jedna linia z wynikami). */
+    public ?int $openRcd = null;
+
     /** Kolumna pętli N-PE (włączana, gdy mierzysz też N-PE). */
     public bool $withNpe = false;
 
@@ -119,14 +122,14 @@ new class extends Component {
         $this->authorize('manage-measurements');
         $last = $this->board->rcds()->reorder()->latest('position')->first();
 
-        $this->board->rcds()->create([
+        $this->openRcd = $this->board->rcds()->create([
             'position' => ($last->position ?? 0) + 1,
             'designation' => 'Fi'.(($last->position ?? 0) + 1),
             'model' => $last?->model,
             'type' => $last->type ?? RcdType::A,
             'rated_current' => $last?->rated_current,
             'rated_residual' => $last->rated_residual ?? 30,
-        ]);
+        ])->id;
 
         $this->refreshState();
     }
@@ -152,6 +155,11 @@ new class extends Component {
 
         $this->board->rcds()->whereKey((int) $id)->update($data);
         unset($this->rcdModels, $this->circuitModels);
+    }
+
+    public function toggleRcd(int $id): void
+    {
+        $this->openRcd = $this->openRcd === $id ? null : $id;
     }
 
     public function deleteRcd(int $id): void
@@ -365,32 +373,47 @@ new class extends Component {
 
             @foreach ($this->rcdModels as $rcd)
                 @php($failures = $rcd->failures($protocol->touch_voltage))
-                <div wire:key="rcd-{{ $rcd->id }}" class="space-y-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
-                    <div class="grid grid-cols-3 gap-2 sm:grid-cols-[5rem_1fr_5rem_5rem_5rem_auto]">
-                        <flux:input wire:model.blur="rcds.{{ $rcd->id }}.designation" size="sm" :label="__('Symbol')" />
-                        <flux:input wire:model.blur="rcds.{{ $rcd->id }}.model" size="sm" :label="__('Device')" placeholder="PXF 40/4/003-A" class="col-span-2 sm:col-span-1" />
-                        <flux:select wire:model.live="rcds.{{ $rcd->id }}.type" size="sm" :label="__('Type')">
-                            @foreach (RcdType::cases() as $type)
-                                <flux:select.option :value="$type->value">{{ $type->value }}</flux:select.option>
-                            @endforeach
-                        </flux:select>
-                        <flux:input wire:model.blur="rcds.{{ $rcd->id }}.rated_current" size="sm" :label="__('In [A]')" inputmode="decimal" />
-                        <flux:input wire:model.blur="rcds.{{ $rcd->id }}.rated_residual" size="sm" :label="__('IΔn [mA]')" inputmode="numeric" />
-                        <div class="flex items-end justify-end">
-                            <flux:button size="sm" variant="ghost" icon="trash" wire:click="deleteRcd({{ $rcd->id }})" wire:confirm="{{ __('Delete this RCD?') }}" :aria-label="__('Delete')" />
+                @php($rcdOpen = $openRcd === $rcd->id)
+                <div wire:key="rcd-{{ $rcd->id }}" class="rounded-lg border border-zinc-200 dark:border-zinc-700">
+                    {{-- Jedna linia: symbol, typ, wyniki, ocena --}}
+                    <button type="button" wire:click="toggleRcd({{ $rcd->id }})" class="flex w-full items-center gap-3 px-3 py-2 text-start text-sm">
+                        <span class="w-12 shrink-0 font-semibold">{{ $rcd->designation }}</span>
+                        <span class="hidden min-w-0 flex-1 truncate text-zinc-500 sm:inline">{{ $rcd->type->value }}{{ $rcd->selective ? ' S' : '' }} {{ $rcd->rated_residual }} mA</span>
+                        <span class="ms-auto whitespace-nowrap tabular-nums text-zinc-500 sm:ms-0">{{ $rcds[$rcd->id]['trip_time'] ?: '—' }} ms · {{ $rcds[$rcd->id]['trip_current'] ?: '—' }} mA</span>
+                        <x-measure-verdict :passes="$failures === null ? null : $failures === []" />
+                        <flux:icon :name="$rcdOpen ? 'chevron-up' : 'chevron-down'" class="size-4 text-zinc-400" />
+                    </button>
+
+                    @if ($rcdOpen)
+                        <div class="space-y-2 border-t border-zinc-200 p-3 dark:border-zinc-700">
+                            <div class="grid grid-cols-3 gap-2">
+                                <flux:input wire:model.blur="rcds.{{ $rcd->id }}.trip_time" :label="__('t [ms]')" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
+                                    :class="in_array('time', $failures ?? [], true) ? 'ring-2 ring-red-500 rounded-lg' : ''" />
+                                <flux:input wire:model.blur="rcds.{{ $rcd->id }}.trip_current" :label="__('Ia [mA]')" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
+                                    :class="in_array('current', $failures ?? [], true) ? 'ring-2 ring-red-500 rounded-lg' : ''" />
+                                <flux:input wire:model.blur="rcds.{{ $rcd->id }}.contact_voltage" :label="__('Ud [V]')" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
+                                    :class="in_array('contact_voltage', $failures ?? [], true) ? 'ring-2 ring-red-500 rounded-lg' : ''" />
+                            </div>
+                            <div class="flex flex-wrap gap-4">
+                                <flux:checkbox wire:model.live="rcds.{{ $rcd->id }}.test_button" :label="__('TEST OK')" />
+                                <flux:checkbox wire:model.live="rcds.{{ $rcd->id }}.selective" :label="__('S (selective)')" />
+                            </div>
+                            <div class="grid grid-cols-3 gap-2 sm:grid-cols-[5rem_1fr_5rem_5rem_5rem]">
+                                <flux:input wire:model.blur="rcds.{{ $rcd->id }}.designation" size="sm" :label="__('Symbol')" />
+                                <flux:input wire:model.blur="rcds.{{ $rcd->id }}.model" size="sm" :label="__('Device')" placeholder="PXF 40/4/003-A" class="col-span-2 sm:col-span-1" />
+                                <flux:select wire:model.live="rcds.{{ $rcd->id }}.type" size="sm" :label="__('Type')">
+                                    @foreach (RcdType::cases() as $type)
+                                        <flux:select.option :value="$type->value">{{ $type->value }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
+                                <flux:input wire:model.blur="rcds.{{ $rcd->id }}.rated_current" size="sm" :label="__('In [A]')" inputmode="decimal" />
+                                <flux:input wire:model.blur="rcds.{{ $rcd->id }}.rated_residual" size="sm" :label="__('IΔn [mA]')" inputmode="numeric" />
+                            </div>
+                            <div class="flex justify-end">
+                                <flux:button size="sm" variant="ghost" icon="trash" wire:click="deleteRcd({{ $rcd->id }})" wire:confirm="{{ __('Delete this RCD?') }}">{{ __('Delete') }}</flux:button>
+                            </div>
                         </div>
-                    </div>
-                    <div class="grid grid-cols-3 items-end gap-2 sm:grid-cols-[6rem_6rem_6rem_auto_auto_1fr]">
-                        <flux:input wire:model.blur="rcds.{{ $rcd->id }}.trip_time" size="sm" :label="__('t [ms]')" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
-                            :class="in_array('time', $failures ?? [], true) ? 'ring-2 ring-red-500 rounded-lg' : ''" />
-                        <flux:input wire:model.blur="rcds.{{ $rcd->id }}.trip_current" size="sm" :label="__('Ia [mA]')" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
-                            :class="in_array('current', $failures ?? [], true) ? 'ring-2 ring-red-500 rounded-lg' : ''" />
-                        <flux:input wire:model.blur="rcds.{{ $rcd->id }}.contact_voltage" size="sm" :label="__('Ud [V]')" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
-                            :class="in_array('contact_voltage', $failures ?? [], true) ? 'ring-2 ring-red-500 rounded-lg' : ''" />
-                        <flux:checkbox wire:model.live="rcds.{{ $rcd->id }}.selective" :label="__('S (selective)')" />
-                        <flux:checkbox wire:model.live="rcds.{{ $rcd->id }}.test_button" :label="__('TEST OK')" />
-                        <div class="flex justify-end"><x-measure-verdict :passes="$failures === null ? null : $failures === []" /></div>
-                    </div>
+                    @endif
                 </div>
             @endforeach
         </flux:card>
@@ -432,29 +455,28 @@ new class extends Component {
                             </div>
                         @endunless
 
-                        {{-- Zabezpieczenie: typ jednym kliknięciem, In, RCD --}}
-                        <div class="flex flex-wrap items-end gap-2">
-                            <flux:field>
-                                <flux:label>{{ __('Protection') }}</flux:label>
-                                <div class="flex gap-1">
-                                    @foreach (ProtectionType::cases() as $type)
-                                        <flux:button size="sm" :variant="$circuit->protection_type === $type ? 'primary' : 'outline'"
-                                            wire:click="$set('circuits.{{ $circuit->id }}.protection_type', '{{ $type->value }}')">{{ $type->label() }}</flux:button>
-                                    @endforeach
-                                </div>
-                            </flux:field>
-                            <flux:input wire:model.blur="circuits.{{ $circuit->id }}.protection_current" size="sm" :label="__('In [A]')" inputmode="decimal" class="w-20" list="in-values" />
-                            <flux:input wire:model.blur="circuits.{{ $circuit->id }}.trip_current_override" size="sm" :label="__('Ia manually [A]')" inputmode="decimal" class="w-28"
-                                :placeholder="$ia !== null ? $fmt($ia, 0) : ''" />
-                            @unless ($board->isSupply())
-                                <flux:select wire:model.live="circuits.{{ $circuit->id }}.rcd_id" size="sm" :label="__('RCD')" class="w-28">
-                                    <flux:select.option value="">—</flux:select.option>
-                                    @foreach ($this->rcdModels as $rcd)
-                                        <flux:select.option :value="(string) $rcd->id">{{ $rcd->designation }}</flux:select.option>
-                                    @endforeach
-                                </flux:select>
-                            @endunless
-                            <div class="pb-1 text-sm text-zinc-500">
+                        {{-- Zabezpieczenie: typ jednym kliknięciem, In, Ia ręcznie, RCD --}}
+                        <div class="space-y-2">
+                            <div class="flex gap-1">
+                                @foreach (ProtectionType::cases() as $type)
+                                    <flux:button size="sm" class="flex-1" :variant="$circuit->protection_type === $type ? 'primary' : 'outline'"
+                                        wire:click="$set('circuits.{{ $circuit->id }}.protection_type', '{{ $type->value }}')">{{ $type->label() }}</flux:button>
+                                @endforeach
+                            </div>
+                            <div class="grid grid-cols-3 gap-2">
+                                <flux:input wire:model.blur="circuits.{{ $circuit->id }}.protection_current" size="sm" :label="__('In [A]')" inputmode="decimal" list="in-values" />
+                                <flux:input wire:model.blur="circuits.{{ $circuit->id }}.trip_current_override" size="sm" :label="__('Ia manually [A]')" inputmode="decimal"
+                                    :placeholder="$ia !== null ? $fmt($ia, 0) : ''" />
+                                @unless ($board->isSupply())
+                                    <flux:select wire:model.live="circuits.{{ $circuit->id }}.rcd_id" size="sm" :label="__('RCD')">
+                                        <flux:select.option value="">—</flux:select.option>
+                                        @foreach ($this->rcdModels as $rcd)
+                                            <flux:select.option :value="(string) $rcd->id">{{ $rcd->designation }}</flux:select.option>
+                                        @endforeach
+                                    </flux:select>
+                                @endunless
+                            </div>
+                            <div class="text-sm text-zinc-500">
                                 Ia {{ $fmt($ia, 0) }} A · Za {{ $fmt($za) }} Ω
                                 @if ($ia === null && $circuit->protection_type === ProtectionType::GG)
                                     <span class="text-amber-600">· {{ __('enter Ia from the fuse catalogue') }}</span>
@@ -462,60 +484,47 @@ new class extends Component {
                             </div>
                         </div>
 
-                        {{-- Punkty --}}
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-sm">
-                                <thead>
-                                    <tr class="text-start text-xs text-zinc-500">
-                                        <th class="w-16 py-1 text-start font-normal">{{ __('Symbol') }}</th>
-                                        @unless ($board->isSupply())
-                                            <th class="py-1 text-start font-normal">{{ __('Tested point') }}</th>
-                                        @endunless
-                                        <th class="w-24 py-1 text-start font-normal">Zs {{ $board->isSupply() ? '' : 'L-PE' }} [Ω]</th>
-                                        <th class="w-14 py-1 text-end font-normal">Ik [A]</th>
-                                        @if ($withNpe && ! $board->isSupply())
-                                            <th class="w-24 py-1 ps-3 text-start font-normal">Zs N-PE [Ω]</th>
-                                            <th class="w-14 py-1 text-end font-normal">Ik [A]</th>
+                        {{-- Punkty: symbol, Zs (duże pole), Ik; nazwa punktu w drugiej linii --}}
+                        @php($pointGrid = $withNpe && ! $board->isSupply() ? 'grid-cols-[2.75rem_minmax(0,1fr)_2.25rem_minmax(0,1fr)_2.25rem]' : 'grid-cols-[3.5rem_minmax(0,1fr)_3rem]')
+                        <div class="space-y-1">
+                            <div class="grid {{ $pointGrid }} items-end gap-2 text-xs text-zinc-500">
+                                <span>{{ __('Symbol') }}</span>
+                                <span>Zs {{ $board->isSupply() ? '' : 'L-PE' }} [Ω]</span>
+                                <span class="text-end">Ik</span>
+                                @if ($withNpe && ! $board->isSupply())
+                                    <span>Zs N-PE [Ω]</span>
+                                    <span class="text-end">Ik</span>
+                                @endif
+                            </div>
+
+                            @foreach ($circuit->points as $point)
+                                @php($ok = $point->passes($za))
+                                @php($okNpe = $point->passes($za, npe: true))
+                                <div wire:key="point-{{ $point->id }}" class="border-t border-zinc-100 pt-1 dark:border-zinc-800">
+                                    <div class="grid {{ $pointGrid }} items-center gap-2">
+                                        @if ($board->isSupply())
+                                            <span class="font-medium">{{ $point->symbol }}</span>
+                                        @else
+                                            <flux:input wire:model.blur="points.{{ $point->id }}.symbol" size="sm" class:input="px-1.5 text-center" />
                                         @endif
-                                        <th class="w-24"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach ($circuit->points as $point)
-                                        @php($ok = $point->passes($za))
-                                        @php($okNpe = $point->passes($za, npe: true))
-                                        <tr wire:key="point-{{ $point->id }}" class="border-t border-zinc-100 dark:border-zinc-800">
-                                            <td class="py-1 pe-2">
-                                                @if ($board->isSupply())
-                                                    <span class="font-medium">{{ $point->symbol }}</span>
-                                                @else
-                                                    <flux:input wire:model.blur="points.{{ $point->id }}.symbol" size="sm" />
-                                                @endif
-                                            </td>
-                                            @unless ($board->isSupply())
-                                                <td class="py-1 pe-2"><flux:input wire:model.blur="points.{{ $point->id }}.location" size="sm" /></td>
-                                            @endunless
-                                            <td class="py-1 pe-2">
-                                                <flux:input wire:model.blur="points.{{ $point->id }}.impedance" size="sm" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
-                                                    :class="$ok === false ? 'ring-2 ring-red-500 rounded-lg' : ($ok === true ? 'ring-1 ring-green-500/60 rounded-lg' : '')" />
-                                            </td>
-                                            <td class="py-1 text-end tabular-nums text-zinc-500">{{ $point->isLineToLine() ? '–' : $fmt($point->shortCircuitCurrent($protocol), 0) }}</td>
-                                            @if ($withNpe && ! $board->isSupply())
-                                                <td class="py-1 ps-3 pe-2">
-                                                    <flux:input wire:model.blur="points.{{ $point->id }}.impedance_npe" size="sm" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
-                                                        :class="$okNpe === false ? 'ring-2 ring-red-500 rounded-lg' : ''" />
-                                                </td>
-                                                <td class="py-1 text-end tabular-nums text-zinc-500">{{ $fmt($point->shortCircuitCurrent($protocol, npe: true), 0) }}</td>
-                                            @endif
-                                            <td class="py-1 text-end">
-                                                @unless ($board->isSupply())
-                                                    <flux:button size="xs" variant="ghost" icon="x-mark" wire:click="deletePoint({{ $point->id }})" :aria-label="__('Delete')" />
-                                                @endunless
-                                            </td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
+                                        <flux:input wire:model.blur="points.{{ $point->id }}.impedance" class:input="px-1.5 text-center" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
+                                            :class="$ok === false ? 'ring-2 ring-red-500 rounded-lg' : ($ok === true ? 'ring-1 ring-green-500/60 rounded-lg' : '')" />
+                                        <span class="text-end text-sm tabular-nums text-zinc-500">{{ $point->isLineToLine() ? '–' : $fmt($point->shortCircuitCurrent($protocol), 0) }}</span>
+                                        @if ($withNpe && ! $board->isSupply())
+                                            <flux:input wire:model.blur="points.{{ $point->id }}.impedance_npe" class:input="px-1.5 text-center" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
+                                                :class="$okNpe === false ? 'ring-2 ring-red-500 rounded-lg' : ''" />
+                                            <span class="text-end text-sm tabular-nums text-zinc-500">{{ $fmt($point->shortCircuitCurrent($protocol, npe: true), 0) }}</span>
+                                        @endif
+                                    </div>
+                                    @unless ($board->isSupply())
+                                        <div class="flex items-center gap-2">
+                                            <input type="text" wire:model.blur="points.{{ $point->id }}.location"
+                                                class="mt-0.5 min-w-0 flex-1 border-0 bg-transparent p-0 text-xs text-zinc-500 focus:ring-0" />
+                                            <flux:button size="xs" variant="ghost" icon="x-mark" wire:click="deletePoint({{ $point->id }})" :aria-label="__('Delete')" />
+                                        </div>
+                                    @endunless
+                                </div>
+                            @endforeach
                         </div>
 
                         @unless ($board->isSupply())

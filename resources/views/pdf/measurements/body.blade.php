@@ -42,8 +42,8 @@
         <p class="section">Rozdzielnica {{ $board->name }} · Data badania: {{ PolishDate::long($protocol->measured_on) }} · Napięcie zasilania: {{ $protocol->phase_voltage }}/{{ $protocol->line_voltage }} V</p>
         <table class="grid">
             <tr>
-                <th>Lp.</th><th>Opis urządzenia</th><th>Typ</th><th>In<br>[A]</th><th>I∆n<br>[mA]</th><th>UL<br>[V]</th>
-                <th>t rcd 1×I∆n<br>[ms]</th><th>Ia<br>[mA]</th><th>Ud<br>[V]</th><th>TEST</th><th>Ocena</th>
+                <th width="5%">Lp.</th><th width="27%">Opis urządzenia</th><th width="6%">Typ</th><th width="6%">In<br>[A]</th><th width="7%">I∆n<br>[mA]</th><th width="6%">UL<br>[V]</th>
+                <th width="10%">t rcd 1×I∆n<br>[ms]</th><th width="7%">Ia<br>[mA]</th><th width="7%">Ud<br>[V]</th><th width="7%">TEST</th><th width="10%">Ocena</th>
             </tr>
             @foreach ($board->rcds as $index => $rcd)
                 @php($passes = $rcd->passes($protocol->touch_voltage))
@@ -87,8 +87,8 @@
             <p class="params">Wyniki przeprowadzonych prób: {{ $params }}</p>
             <table class="grid">
                 <tr>
-                    <th>Lp.</th><th>Badany punkt</th><th>Symbol</th><th>Zabezp. nr</th><th>Typ</th><th>In<br>[A]</th><th>Ia<br>[A]</th>
-                    <th>Zs<br>[Ω]</th><th>Za<br>[Ω]</th><th>Ik<br>[A]</th><th>Ocena</th>
+                    <th width="5%">Lp.</th><th width="29%">Badany punkt</th><th width="8%">Symbol</th><th width="9%">Zabezp. nr</th><th width="6%">Typ</th><th width="6%">In<br>[A]</th><th width="7%">Ia<br>[A]</th>
+                    <th width="7%">Zs<br>[Ω]</th><th width="7%">Za<br>[Ω]</th><th width="6%">Ik<br>[A]</th><th width="10%">Ocena</th>
                 </tr>
                 @php($lp = 0)
                 @foreach ($board->circuits as $circuit)
@@ -145,7 +145,7 @@
             @php($za = Criteria::allowedImpedance($protocol->phase_voltage, $ia))
             <p class="section">{{ $board->name }}</p>
             <table class="grid">
-                <tr><th>Lp.</th><th>Badany odcinek</th><th>Typ</th><th>In [A]</th><th>Ia [A]</th><th>Zs [Ω]</th><th>Za [Ω]</th><th>Ik [A]</th><th>Ocena</th></tr>
+                <tr><th width="6%">Lp.</th><th width="18%">Badany odcinek</th><th width="9%">Typ</th><th width="10%">In [A]</th><th width="10%">Ia [A]</th><th width="11%">Zs [Ω]</th><th width="11%">Za [Ω]</th><th width="11%">Ik [A]</th><th width="14%">Ocena</th></tr>
                 @foreach ($points as $index => $point)
                     @php($passes = $point->passes($za))
                     @php($supplyNegative = $supplyNegative || $passes === false)
