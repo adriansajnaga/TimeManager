@@ -937,6 +937,7 @@
     "The invoice XML does not match the FA(3) schema: :errors": "Das Rechnungs-XML entspricht nicht dem Schema FA(3): :errors",
     "The KSeF certificate does not contain an RSA key.": "Das KSeF-Zertifikat enthält keinen RSA-Schlüssel.",
     "The KSeF document has no invoice number (P_2).": "Das KSeF-Dokument hat keine Rechnungsnummer (P_2).",
+    "The mail server rejected the login. To avoid locking the account, the app does not retry for :minutes minutes. Check the password in Administration → E-mail and use “Test the mailbox”.": "Der Mailserver hat die Anmeldung abgelehnt. Damit das Konto nicht gesperrt wird, versucht die App es :minutes Minuten lang nicht erneut. Prüfen Sie das Passwort unter Administration → E-Mail und nutzen Sie „Postfach testen“.",
     "The mailbox has no Sent folder.": "Das Postfach hat keinen Ordner „Gesendet“.",
     "The mailbox works.": "Das Postfach funktioniert.",
     "The NBP service returned an error (:status). Enter the rate manually.": "Der NBP-Dienst meldet einen Fehler (:status). Kurs manuell eingeben.",

@@ -14,6 +14,7 @@ use App\Services\Mailbox\MailSummary;
 use App\Services\Mailbox\MailView;
 use Carbon\CarbonImmutable;
 use Illuminate\Mail\SentMessage;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 use Symfony\Component\Mailer\Envelope;
 use Symfony\Component\Mime\Email;
@@ -262,4 +263,23 @@ test('sent e-mails are saved to the Sent folder of the mailbox', function () {
     expect(MailFolder::looksLikeSent('INBOX.Sent'))->toBeTrue()
         ->and(MailFolder::looksLikeSent('Wysłane'))->toBeTrue()
         ->and(MailFolder::looksLikeSent('INBOX'))->toBeFalse();
+});
+
+test('after a rejected login the mailbox does not retry until the password is saved or tested', function () {
+    $settings = MailSetting::query()->create([
+        'host' => 'mail.ascomm.test', 'from_address' => 'faktury@ascomm.test',
+        'username' => 'faktury@ascomm.test', 'password' => 'secret', 'imap_host' => 'imap.invalid',
+    ]);
+
+    // Stan po odrzuconym logowaniu (ImapMailbox zapisuje odcisk danych logowania).
+    Cache::put('mailbox.login-paused', hash('sha256', 'imap.invalid|faktury@ascomm.test|secret'), now()->addMinutes(15));
+
+    expect(fn () => ImapMailbox::fromSettings()->ping())
+        ->toThrow(MailboxException::class, __('The mail server rejected the login. To avoid locking the account, the app does not retry for :minutes minutes. Check the password in Administration → E-mail and use “Test the mailbox”.', ['minutes' => ImapMailbox::PAUSE_MINUTES]));
+
+    // Nowe hasło = inny odcisk — wstrzymanie go nie dotyczy (tu: zwykły błąd połączenia z nieistniejącym serwerem).
+    $settings->update(['password' => 'new-secret']);
+    ImapMailbox::resumeLogin();
+
+    expect(Cache::has('mailbox.login-paused'))->toBeFalse();
 });

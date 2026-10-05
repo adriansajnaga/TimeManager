@@ -4,6 +4,8 @@ namespace App\Services\Mailbox;
 
 use App\Models\MailSetting;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 use Webklex\PHPIMAP\Address;
 use Webklex\PHPIMAP\Attachment;
@@ -11,6 +13,7 @@ use Webklex\PHPIMAP\Client;
 use Webklex\PHPIMAP\ClientManager;
 use Webklex\PHPIMAP\Connection\Protocols\ImapProtocol;
 use Webklex\PHPIMAP\Connection\Protocols\Response;
+use Webklex\PHPIMAP\Exceptions\AuthFailedException;
 use Webklex\PHPIMAP\Folder;
 use Webklex\PHPIMAP\Message;
 
@@ -21,6 +24,11 @@ use Webklex\PHPIMAP\Message;
  */
 final class ImapMailbox implements Mailbox
 {
+    /** Ile minut nie logujemy się po odrzuconym haśle. */
+    public const PAUSE_MINUTES = 15;
+
+    private const PAUSE_KEY = 'mailbox.login-paused';
+
     private ?Client $client = null;
 
     public function __construct(private readonly MailSetting $settings) {}
@@ -216,7 +224,13 @@ final class ImapMailbox implements Mailbox
         }
 
         if ($this->client === null) {
-            $this->client = (new ClientManager)->make([
+            // Po odrzuconym logowaniu nie próbujemy dalej: każda kolejna próba to dla serwera
+            // następny „atak” (cPHulk/Dovecot) i blokada konta się przedłuża.
+            if (Cache::get(self::PAUSE_KEY) === $this->fingerprint()) {
+                throw new MailboxException(__('The mail server rejected the login. To avoid locking the account, the app does not retry for :minutes minutes. Check the password in Administration → E-mail and use “Test the mailbox”.', ['minutes' => self::PAUSE_MINUTES]));
+            }
+
+            $client = (new ClientManager)->make([
                 'host' => $this->settings->imap_host,
                 'port' => $this->settings->imap_port,
                 'encryption' => $this->settings->imap_encryption === 'none' ? false : $this->settings->imap_encryption,
@@ -226,10 +240,59 @@ final class ImapMailbox implements Mailbox
                 'protocol' => 'imap',
                 'timeout' => 30,
             ]);
-            $this->client->connect();
+
+            try {
+                $client->connect();
+            } catch (Throwable $exception) {
+                if (self::isAuthFailure($exception)) {
+                    Cache::put(self::PAUSE_KEY, $this->fingerprint(), now()->addMinutes(self::PAUSE_MINUTES));
+                    Log::warning('IMAP login rejected; mailbox paused.', ['host' => $this->settings->imap_host, 'user' => $this->settings->username, 'minutes' => self::PAUSE_MINUTES]);
+                }
+
+                throw $exception;
+            }
+
+            $this->client = $client;
         }
 
         return $this->client;
+    }
+
+    /**
+     * Zdejmuje wstrzymanie logowania (zapis ustawień, ręczny test skrzynki).
+     */
+    public static function resumeLogin(): void
+    {
+        Cache::forget(self::PAUSE_KEY);
+    }
+
+    /**
+     * Sesja kończona poleceniem LOGOUT — serwer nie liczy zerwanych połączeń.
+     */
+    public function __destruct()
+    {
+        try {
+            $this->client?->disconnect();
+        } catch (Throwable) {
+            // Połączenie i tak się zamyka.
+        }
+    }
+
+    private static function isAuthFailure(Throwable $exception): bool
+    {
+        for ($current = $exception; $current !== null; $current = $current->getPrevious()) {
+            if ($current instanceof AuthFailedException || str_contains(strtoupper($current->getMessage()), 'AUTHENTICATIONFAILED')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Wstrzymanie dotyczy tych danych logowania — nowe hasło w ustawieniach od razu je znosi. */
+    private function fingerprint(): string
+    {
+        return hash('sha256', $this->settings->imap_host.'|'.$this->settings->username.'|'.$this->settings->password);
     }
 
     private function folder(string $path): Folder

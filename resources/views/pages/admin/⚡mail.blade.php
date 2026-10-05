@@ -82,6 +82,7 @@ new #[Title('E-mail')] class extends Component {
         }
 
         $settings->save();
+        ImapMailbox::resumeLogin();
         $this->reset('password');
         $this->fillFrom($settings);
 
@@ -126,6 +127,9 @@ new #[Title('E-mail')] class extends Component {
     public function testMailbox(): void
     {
         $this->authorize('manage-settings');
+
+        // Ręczny test zawsze próbuje — także po wstrzymaniu logowania.
+        ImapMailbox::resumeLogin();
 
         try {
             ImapMailbox::fromSettings()->ping();
