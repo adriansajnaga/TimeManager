@@ -5,6 +5,7 @@ use App\Http\Controllers\ContractorLogoController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\MailboxController;
+use App\Http\Controllers\MeasurementReportController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -37,6 +38,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('contractors/{contractor}/edit', 'pages::contractors.form')->name('contractors.edit');
         Route::livewire('contractors/{contractor}', 'pages::contractors.show')->name('contractors.show');
         Route::get('contractors/{contractor}/logo', ContractorLogoController::class)->name('contractors.logo');
+    });
+
+    Route::middleware('can:manage-measurements')->group(function () {
+        Route::livewire('measurements', 'pages::measurements.index')->name('measurements.index');
+        Route::livewire('measurements/create', 'pages::measurements.form')->name('measurements.create');
+        Route::livewire('measurements/equipment', 'pages::measurements.equipment')->name('measurements.equipment');
+        Route::livewire('measurements/instruments/{instrument}', 'pages::measurements.instrument')->name('measurements.instrument');
+        Route::livewire('measurements/performers/{performer}', 'pages::measurements.performer')->name('measurements.performer');
+        Route::livewire('measurements/{protocol}', 'pages::measurements.show')->name('measurements.show');
+        Route::livewire('measurements/{protocol}/edit', 'pages::measurements.form')->name('measurements.edit');
+        Route::livewire('measurements/{protocol}/boards/{board}', 'pages::measurements.board')->name('measurements.board');
+        Route::get('measurements/{protocol}/report', MeasurementReportController::class)->name('measurements.report');
     });
 
     Route::middleware('can:manage-notes')->group(function () {

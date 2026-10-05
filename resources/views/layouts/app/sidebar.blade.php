@@ -69,6 +69,17 @@
                     </flux:sidebar.group>
                 @endcanany
 
+                @can('manage-measurements')
+                    <flux:sidebar.group :heading="__('Measurements')" class="grid">
+                        <flux:sidebar.item icon="bolt" :href="route('measurements.index')" :current="request()->routeIs('measurements.*') && ! request()->routeIs('measurements.equipment', 'measurements.instrument', 'measurements.performer')" wire:navigate>
+                            {{ __('Protocols') }}
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="wrench-screwdriver" :href="route('measurements.equipment')" :current="request()->routeIs('measurements.equipment', 'measurements.instrument', 'measurements.performer')" wire:navigate>
+                            {{ __('Instruments and people') }}
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+                @endcan
+
                 @canany(['manage-users', 'manage-settings'])
                     {{-- Domyślnie zwinięta; rozwinięta, gdy jesteś na jednej z jej stron. --}}
                     <flux:sidebar.group :heading="__('Administration')" icon="cog-6-tooth" expandable :expanded="request()->routeIs('admin.*')" class="grid">
