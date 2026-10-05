@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Contracts\Attachable;
 use App\Support\DescribesFile;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -43,6 +44,9 @@ class Attachment extends Model
     public const PERMISSIONS = [
         Note::class => 'manage-notes',
         Contractor::class => 'manage-contractors',
+        MeasurementProtocol::class => 'manage-measurements',
+        MeasurementInstrument::class => 'manage-measurements',
+        MeasurementPerformer::class => 'manage-measurements',
     ];
 
     protected static function booted(): void
@@ -53,7 +57,7 @@ class Attachment extends Model
     /**
      * Zapisuje wgrany plik w katalogu właściciela pod losową nazwą (oryginalna zostaje w bazie).
      */
-    public static function store(Note|Contractor $owner, UploadedFile $file): self
+    public static function store(Model&Attachable $owner, UploadedFile $file): self
     {
         $extension = strtolower($file->getClientOriginalExtension());
         $stored = $file->storeAs(

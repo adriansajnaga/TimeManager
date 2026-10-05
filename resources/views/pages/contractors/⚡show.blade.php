@@ -1,10 +1,11 @@
 <?php
 
+use App\Models\Contracts\Attachable;
 use App\Livewire\ComponentWithAttachments;
 use App\Models\Contractor;
 use App\Models\Invoice;
-use App\Models\Note;
 use App\Models\Project;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 
@@ -39,7 +40,7 @@ new class extends ComponentWithAttachments {
             ->latest('issue_date')->latest('id')->limit(8)->get();
     }
 
-    protected function attachmentOwner(): Note|Contractor|null
+    protected function attachmentOwner(): (Model&Attachable)|null
     {
         return $this->contractor;
     }

@@ -10,6 +10,7 @@ use App\Enums\PackageDocument;
 use App\Enums\VatCode;
 use App\Models\Concerns\HasAttachments;
 use App\Models\Concerns\LogsActivity;
+use App\Models\Contracts\Attachable;
 use Database\Factories\ContractorFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -63,7 +64,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'hourly_rate', 'km_rate', 'base_address', 'vehicle_id',
     'email_to', 'email_cc', 'email_subject_template', 'email_body_template', 'notes', 'is_active',
 ])]
-class Contractor extends Model
+class Contractor extends Model implements Attachable
 {
     /** @use HasFactory<ContractorFactory> */
     use HasAttachments, HasFactory, LogsActivity;

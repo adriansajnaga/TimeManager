@@ -3,9 +3,9 @@
 namespace App\Livewire;
 
 use App\Models\Attachment;
-use App\Models\Contractor;
-use App\Models\Note;
+use App\Models\Contracts\Attachable;
 use Flux\Flux;
+use Illuminate\Database\Eloquent\Model;
 use Livewire\Component;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\WithFileUploads;
@@ -31,7 +31,7 @@ abstract class ComponentWithAttachments extends Component
     public string $attachmentExpiresAt = '';
 
     /** Rekord, do którego dołączamy pliki (null = jeszcze niezapisany). */
-    abstract protected function attachmentOwner(): Note|Contractor|null;
+    abstract protected function attachmentOwner(): (Model&Attachable)|null;
 
     /** Gate wymagany do zmian w plikach. */
     abstract protected function attachmentPermission(): string;
@@ -123,7 +123,7 @@ abstract class ComponentWithAttachments extends Component
         ];
     }
 
-    protected function storeUploads(Note|Contractor $owner): void
+    protected function storeUploads(Model&Attachable $owner): void
     {
         foreach ($this->uploads as $file) {
             Attachment::store($owner, $file);

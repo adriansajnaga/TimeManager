@@ -18,4 +18,5 @@ enum Permission: string
     case LogOwnTime = 'log-own-time';
     case UseMailbox = 'use-mailbox';
     case ManageNotes = 'manage-notes';
+    case ManageMeasurements = 'manage-measurements';
 }

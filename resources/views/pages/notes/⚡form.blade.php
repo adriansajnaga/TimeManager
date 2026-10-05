@@ -1,9 +1,10 @@
 <?php
 
+use App\Models\Contracts\Attachable;
 use App\Livewire\ComponentWithAttachments;
-use App\Models\Contractor;
 use App\Models\Note;
 use Flux\Flux;
+use Illuminate\Database\Eloquent\Model;
 
 new class extends ComponentWithAttachments {
     public ?Note $note = null;
@@ -63,7 +64,7 @@ new class extends ComponentWithAttachments {
         $this->redirectRoute('notes.index', navigate: true);
     }
 
-    protected function attachmentOwner(): Note|Contractor|null
+    protected function attachmentOwner(): (Model&Attachable)|null
     {
         return $this->note;
     }
