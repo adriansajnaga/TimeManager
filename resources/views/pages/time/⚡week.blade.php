@@ -387,12 +387,13 @@ new #[Title('Working time')] class extends Component {
 
             <flux:input wire:model="form.work_date" type="date" :label="__('Date')" required />
 
-            <flux:select wire:model.live="form.project_id" :label="__('Project')" required>
-                <flux:select.option value="">{{ __('Choose a project') }}</flux:select.option>
-                @foreach ($this->availableProjects as $project)
-                    <flux:select.option :value="$project->id">{{ $project->fullName() }}</flux:select.option>
-                @endforeach
-            </flux:select>
+            <x-searchable-select wire:model.live="form.project_id" :label="__('Project')"
+                :placeholder="__('Choose a project')" :search-placeholder="__('Search by number, name, client or place')"
+                :options="$this->availableProjects->map(fn ($project) => [
+                    'value' => $project->id,
+                    'label' => $project->fullName(),
+                    'search' => implode(' ', array_filter([$project->contractor?->name, $project->site_name, $project->site_city])),
+                ])->all()" />
 
             <div class="grid grid-cols-2 gap-4">
                 <flux:select wire:model.live="form.start_time" :label="__('Start')" required>
