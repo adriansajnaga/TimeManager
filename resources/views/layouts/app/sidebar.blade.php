@@ -49,7 +49,7 @@
                     </flux:sidebar.group>
                 @endcan
 
-                @canany(['manage-projects', 'manage-contractors'])
+                @canany(['manage-projects', 'manage-contractors', 'manage-notes'])
                     <flux:sidebar.group :heading="__('Records')" class="grid">
                         @can('manage-projects')
                             <flux:sidebar.item icon="folder" :href="route('projects.index')" :current="request()->routeIs('projects.*')" wire:navigate>
@@ -59,6 +59,11 @@
                         @can('manage-contractors')
                             <flux:sidebar.item icon="building-office" :href="route('contractors.index')" :current="request()->routeIs('contractors.*')" wire:navigate>
                                 {{ __('Contractors') }}
+                            </flux:sidebar.item>
+                        @endcan
+                        @can('manage-notes')
+                            <flux:sidebar.item icon="pencil-square" :href="route('notes.index')" :current="request()->routeIs('notes.*')" wire:navigate>
+                                {{ __('Notes') }}
                             </flux:sidebar.item>
                         @endcan
                     </flux:sidebar.group>

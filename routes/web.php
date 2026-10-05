@@ -4,6 +4,7 @@ use App\Http\Controllers\ContractorLogoController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\MailboxController;
+use App\Http\Controllers\NoteAttachmentController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -34,6 +35,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('contractors/create', 'pages::contractors.form')->name('contractors.create');
         Route::livewire('contractors/{contractor}/edit', 'pages::contractors.form')->name('contractors.edit');
         Route::get('contractors/{contractor}/logo', ContractorLogoController::class)->name('contractors.logo');
+    });
+
+    Route::middleware('can:manage-notes')->group(function () {
+        Route::livewire('notes', 'pages::notes.index')->name('notes.index');
+        Route::livewire('notes/create', 'pages::notes.form')->name('notes.create');
+        Route::livewire('notes/{note}', 'pages::notes.form')->name('notes.edit');
+        Route::get('notes/attachments/{attachment}', NoteAttachmentController::class)->name('notes.attachment');
     });
 
     Route::middleware('can:manage-projects')->group(function () {
