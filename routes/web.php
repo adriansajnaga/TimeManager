@@ -34,6 +34,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('contractors', 'pages::contractors.index')->name('contractors.index');
         Route::livewire('contractors/create', 'pages::contractors.form')->name('contractors.create');
         Route::livewire('contractors/{contractor}/edit', 'pages::contractors.form')->name('contractors.edit');
+        Route::livewire('contractors/{contractor}', 'pages::contractors.show')->name('contractors.show');
         Route::get('contractors/{contractor}/logo', ContractorLogoController::class)->name('contractors.logo');
     });
 

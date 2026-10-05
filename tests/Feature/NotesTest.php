@@ -101,7 +101,7 @@ test('contractor record keeps attached documents', function () {
     $this->actingAs($this->admin);
     $contractor = Contractor::factory()->create();
 
-    Livewire::test('pages::contractors.form', ['contractor' => $contractor])
+    Livewire::test('pages::contractors.show', ['contractor' => $contractor])
         ->set('uploads', [UploadedFile::fake()->create('Rahmenvertrag 2026.pdf', 200, 'application/pdf')])
         ->assertHasNoErrors()
         ->assertSee('Rahmenvertrag 2026.pdf');
@@ -121,18 +121,63 @@ test('contractor record keeps attached documents', function () {
     Storage::disk('local')->assertMissing($document->path);
 });
 
-test('new contractor gets files chosen before the first save', function () {
+test('contractor opens as a preview with its documents', function () {
     $this->actingAs($this->admin);
+    $contractor = Contractor::factory()->create(['name' => 'Lürssen Werft', 'email' => 'buero@luerssen.test']);
 
-    Livewire::test('pages::contractors.form')
-        ->set('form.name', 'Neptun Werft GmbH')
-        ->set('form.street', 'Werftallee 13')
-        ->set('form.zip', '18119')
-        ->set('form.city', 'Rostock')
-        ->set('form.country_code', 'de')
-        ->set('uploads', [UploadedFile::fake()->create('Stammdaten.xlsx', 15)])
-        ->call('save')
-        ->assertHasNoErrors();
+    $this->get(route('contractors.index'))->assertSee(route('contractors.show', $contractor), false);
 
-    expect(Contractor::query()->where('name', 'Neptun Werft GmbH')->sole()->attachments)->toHaveCount(1);
+    $this->get(route('contractors.show', $contractor))
+        ->assertOk()
+        ->assertSee('Lürssen Werft')
+        ->assertSee('buero@luerssen.test')
+        ->assertSee(route('contractors.edit', $contractor), false);
+});
+
+test('a document gets a caption and an expiry date and shows up on the dashboard', function () {
+    $this->actingAs($this->admin);
+    $contractor = Contractor::factory()->create(['name' => 'TKMS']);
+
+    $component = Livewire::test('pages::contractors.show', ['contractor' => $contractor])
+        ->set('uploads', [UploadedFile::fake()->create('a1.pdf', 20, 'application/pdf')]);
+
+    $document = $contractor->attachments()->sole();
+
+    $component->call('editAttachment', $document->id)
+        ->assertSet('attachmentHasExpiry', false)
+        ->set('attachmentDescription', 'Zaświadczenie A1')
+        ->set('attachmentHasExpiry', true)
+        ->set('attachmentExpiresAt', '')
+        ->call('saveAttachment')
+        ->assertHasErrors('attachmentExpiresAt')
+        ->set('attachmentExpiresAt', now()->addDays(10)->toDateString())
+        ->call('saveAttachment')
+        ->assertHasNoErrors()
+        ->assertSee('Zaświadczenie A1');
+
+    $document->refresh();
+    expect($document->description)->toBe('Zaświadczenie A1')
+        ->and($document->expiryState())->toBe('soon')
+        ->and($document->daysToExpiry())->toBe(10);
+
+    // Dokument ważny jeszcze długo — bez alertu.
+    $contractor->attachments()->create(['name' => 'umowa.pdf', 'description' => 'Umowa ramowa', 'path' => 'x', 'mime' => 'application/pdf', 'size' => 1, 'expires_at' => now()->addYear()]);
+
+    Livewire::test('pages::dashboard')
+        ->assertSee(__('Documents expiring soon'))
+        ->assertSee('Zaświadczenie A1')
+        ->assertDontSee('Umowa ramowa');
+
+    // Pracownik nie widzi dokumentów kontrahentów.
+    $this->actingAs(User::factory()->create());
+    Livewire::test('pages::dashboard')->assertDontSee('Zaświadczenie A1');
+
+    // Odhaczenie daty ważności usuwa ją.
+    $this->actingAs($this->admin);
+    Livewire::test('pages::contractors.show', ['contractor' => $contractor])
+        ->call('editAttachment', $document->id)
+        ->set('attachmentHasExpiry', false)
+        ->call('saveAttachment');
+
+    expect($document->refresh()->expires_at)->toBeNull();
 });

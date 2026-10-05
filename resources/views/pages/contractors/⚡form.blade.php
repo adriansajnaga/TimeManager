@@ -6,19 +6,21 @@ use App\Enums\InvoiceLineMode;
 use App\Enums\Language;
 use App\Enums\PackageDocument;
 use App\Enums\VatCode;
-use App\Livewire\ComponentWithAttachments;
 use App\Livewire\Forms\ContractorForm;
 use App\Models\BankAccount;
 use App\Models\Contractor;
-use App\Models\Note;
 use App\Models\Vehicle;
 use Flux\Flux;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Computed;
+use Livewire\Component;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Livewire\WithFileUploads;
 
-new class extends ComponentWithAttachments {
+new class extends Component {
+    use WithFileUploads;
+
     public ContractorForm $form;
 
     /** Logo do nagłówka dokumentów klienta (np. Stundennachweis). */
@@ -32,7 +34,7 @@ new class extends ComponentWithAttachments {
     public function save(): void
     {
         $this->authorize('manage-contractors');
-        $this->validate(['logo' => ['nullable', 'image', 'mimes:png,jpg,jpeg', 'max:2048'], ...$this->uploadRules()]);
+        $this->validate(['logo' => ['nullable', 'image', 'mimes:png,jpg,jpeg', 'max:2048']]);
 
         $creating = $this->form->contractor === null;
         $contractor = $this->form->save();
@@ -48,12 +50,10 @@ new class extends ComponentWithAttachments {
             $this->logo = null;
         }
 
-        $this->storeUploads($contractor);
-
         Flux::toast(variant: 'success', text: __('Contractor saved.'));
 
         if ($creating) {
-            $this->redirectRoute('contractors.edit', $contractor, navigate: true);
+            $this->redirectRoute('contractors.show', $contractor, navigate: true);
         }
     }
 
@@ -133,16 +133,6 @@ new class extends ComponentWithAttachments {
         return Vehicle::query()->orderBy('name')->get();
     }
 
-    protected function attachmentOwner(): Note|Contractor|null
-    {
-        return $this->form->contractor;
-    }
-
-    protected function attachmentPermission(): string
-    {
-        return 'manage-contractors';
-    }
-
     public function render()
     {
         return $this->view()->title($this->form->contractor?->name ?? __('New contractor'));
@@ -156,6 +146,9 @@ new class extends ComponentWithAttachments {
                 <flux:heading size="xl" level="1">{{ $form->contractor?->name ?? __('New contractor') }}</flux:heading>
                 <flux:subheading>
                     <flux:link :href="route('contractors.index')" wire:navigate>{{ __('Contractors') }}</flux:link>
+                    @if ($form->contractor)
+                        · <flux:link :href="route('contractors.show', $form->contractor)" wire:navigate>{{ __('Preview') }}</flux:link>
+                    @endif
                 </flux:subheading>
             </div>
 
@@ -342,14 +335,12 @@ new class extends ComponentWithAttachments {
             />
         </flux:card>
 
-        <x-attachments :owner="$form->contractor" :uploads="$uploads" :heading="__('Attached documents')" />
-
         <flux:card>
             <flux:textarea wire:model="form.notes" :label="__('Notes')" rows="3" />
         </flux:card>
 
         <div class="flex justify-end gap-2">
-            <flux:button :href="route('contractors.index')" wire:navigate>{{ __('Cancel') }}</flux:button>
+            <flux:button :href="$form->contractor ? route('contractors.show', $form->contractor) : route('contractors.index')" wire:navigate>{{ __('Cancel') }}</flux:button>
             <flux:button variant="primary" type="submit">{{ __('Save') }}</flux:button>
         </div>
     </form>

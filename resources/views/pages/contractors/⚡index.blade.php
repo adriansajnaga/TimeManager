@@ -88,7 +88,7 @@ new #[Title('Contractors')] class extends Component {
             @forelse ($this->contractors as $contractor)
                 <flux:table.row :key="$contractor->id">
                     <flux:table.cell variant="strong">
-                        <flux:link :href="route('contractors.edit', $contractor)" wire:navigate>{{ $contractor->name }}</flux:link>
+                        <flux:link :href="route('contractors.show', $contractor)" wire:navigate>{{ $contractor->name }}</flux:link>
                         @unless ($contractor->is_active)
                             <flux:badge size="sm" color="zinc" class="ms-2">{{ __('Inactive') }}</flux:badge>
                         @endunless

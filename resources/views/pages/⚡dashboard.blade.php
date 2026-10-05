@@ -6,8 +6,10 @@ use App\Enums\KsefStatus;
 use App\Enums\Permission;
 use App\Enums\ProjectBillingType;
 use App\Enums\ProjectStatus;
+use App\Models\Attachment;
 use App\Models\Contractor;
 use App\Models\Invoice;
+use App\Models\Note;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\WorkWeek;
@@ -20,6 +22,24 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 
 new #[Title('Dashboard')] class extends Component {
+    /**
+     * Dokumenty (kontrahentów, notatek), których ważność minęła albo mija w ciągu Attachment::WARN_DAYS dni.
+     *
+     * @return Collection<int, Attachment>
+     */
+    #[Computed]
+    public function expiringDocuments(): Collection
+    {
+        $allowed = array_keys(array_filter(Attachment::PERMISSIONS, fn (string $gate) => Auth::user()->can($gate)));
+
+        if ($allowed === []) {
+            return collect();
+        }
+
+        return Attachment::query()->expiringSoon()->whereIn('attachable_type', $allowed)
+            ->with('attachable')->orderBy('expires_at')->get();
+    }
+
     /**
      * Moje godziny: ten tydzień i ten miesiąc.
      *
@@ -150,6 +170,35 @@ new #[Title('Dashboard')] class extends Component {
 
 <section class="w-full space-y-6">
     <flux:heading size="xl" level="1">{{ __('Dashboard') }}</flux:heading>
+
+    @if ($this->expiringDocuments->isNotEmpty())
+        @php($anyExpired = $this->expiringDocuments->contains(fn ($document) => $document->expiryState() === 'expired'))
+        <flux:callout icon="exclamation-triangle" :color="$anyExpired ? 'red' : 'amber'" :heading="__('Documents expiring soon')">
+            <flux:callout.text>
+                <ul class="space-y-1">
+                    @foreach ($this->expiringDocuments as $document)
+                        @php($owner = $document->attachable)
+                        @php($days = (int) $document->daysToExpiry())
+                        <li wire:key="expiring-{{ $document->id }}">
+                            @if ($owner instanceof Contractor)
+                                <flux:link :href="route('contractors.show', $owner)" wire:navigate>{{ $owner->name }}</flux:link>:
+                            @elseif ($owner instanceof Note)
+                                <flux:link :href="route('notes.edit', $owner)" wire:navigate>{{ $owner->title }}</flux:link>:
+                            @endif
+                            <span class="font-medium">{{ $document->label() }}</span> —
+                            @if ($days < 0)
+                                {{ __('expired on :date', ['date' => $document->expires_at->format('d.m.Y')]) }}
+                            @elseif ($days === 0)
+                                {{ __('expires today') }}
+                            @else
+                                {{ trans_choice('expires :date (in :count day)|expires :date (in :count days)', $days, ['date' => $document->expires_at->format('d.m.Y'), 'count' => $days]) }}
+                            @endif
+                        </li>
+                    @endforeach
+                </ul>
+            </flux:callout.text>
+        </flux:callout>
+    @endif
 
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <flux:card>

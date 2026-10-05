@@ -11,7 +11,7 @@ use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\WithFileUploads;
 
 /**
- * Strona z plikami rekordu (notatka, kontrahent): wgrywanie i usuwanie.
+ * Strona z plikami rekordu (notatka, kontrahent): wgrywanie, podpis, data ważności i usuwanie.
  * W zapisanym rekordzie pliki dołączamy od razu po wybraniu; w nowym — przy zapisie (storeUploads).
  */
 abstract class ComponentWithAttachments extends Component
@@ -20,6 +20,15 @@ abstract class ComponentWithAttachments extends Component
 
     /** @var list<TemporaryUploadedFile> */
     public array $uploads = [];
+
+    /** Edycja podpisu i daty ważności jednego pliku (okno attachment-edit). */
+    public ?int $editingAttachmentId = null;
+
+    public string $attachmentDescription = '';
+
+    public bool $attachmentHasExpiry = false;
+
+    public string $attachmentExpiresAt = '';
 
     /** Rekord, do którego dołączamy pliki (null = jeszcze niezapisany). */
     abstract protected function attachmentOwner(): Note|Contractor|null;
@@ -62,6 +71,45 @@ abstract class ComponentWithAttachments extends Component
         $owner?->unsetRelation('attachments');
 
         Flux::toast(variant: 'success', text: __('File deleted.'));
+    }
+
+    public function editAttachment(int $id): void
+    {
+        $attachment = $this->attachmentOwner()?->attachments()->whereKey($id)->first();
+
+        if ($attachment === null) {
+            return;
+        }
+
+        $this->resetValidation();
+        $this->editingAttachmentId = $attachment->id;
+        $this->attachmentDescription = (string) $attachment->description;
+        $this->attachmentHasExpiry = $attachment->expires_at !== null;
+        $this->attachmentExpiresAt = $attachment->expires_at?->toDateString() ?? '';
+
+        Flux::modal('attachment-edit')->show();
+    }
+
+    public function saveAttachment(): void
+    {
+        $this->authorize($this->attachmentPermission());
+
+        $this->validate([
+            'attachmentDescription' => ['nullable', 'string', 'max:255'],
+            'attachmentExpiresAt' => $this->attachmentHasExpiry ? ['required', 'date'] : ['nullable'],
+        ]);
+
+        $owner = $this->attachmentOwner();
+        $attachment = $owner?->attachments()->whereKey($this->editingAttachmentId)->first();
+
+        $attachment?->update([
+            'description' => trim($this->attachmentDescription) ?: null,
+            'expires_at' => $this->attachmentHasExpiry ? $this->attachmentExpiresAt : null,
+        ]);
+        $owner?->unsetRelation('attachments');
+
+        Flux::modal('attachment-edit')->close();
+        Flux::toast(variant: 'success', text: __('File details saved.'));
     }
 
     /**
