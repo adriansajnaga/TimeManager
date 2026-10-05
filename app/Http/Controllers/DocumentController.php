@@ -88,7 +88,7 @@ class DocumentController extends Controller
         ]);
 
         /** @var Collection<int, WorkWeek> $weeks */
-        $weeks = WorkWeek::query()->closed()->whereIn('id', $validated['weeks'])->get();
+        $weeks = WorkWeek::query()->closedFor((int) $validated['client'])->whereIn('id', $validated['weeks'])->get();
         abort_if($weeks->isEmpty(), 404);
 
         $document = new Stundenzettel(Contractor::query()->findOrFail((int) $validated['client']), $weeks);
@@ -134,7 +134,7 @@ class DocumentController extends Controller
         ]);
 
         /** @var Collection<int, WorkWeek> $weeks */
-        $weeks = WorkWeek::query()->closed()->whereIn('id', $validated['weeks'])->get();
+        $weeks = WorkWeek::query()->closedFor((int) $validated['client'])->whereIn('id', $validated['weeks'])->get();
         $client = Contractor::query()->findOrFail((int) $validated['client']);
 
         $documents = array_values(collect(app(MileageCalculator::class)->trips($weeks, $client))

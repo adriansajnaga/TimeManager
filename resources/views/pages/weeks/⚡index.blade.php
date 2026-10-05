@@ -47,7 +47,13 @@ new #[Title('Weeks')] class extends Component {
             ->withCount([
                 'timeEntries as projects_count' => fn (Builder $query) => $query->select(DB::raw('count(distinct project_id)')),
                 'weeklyReports as complete_reports_count' => fn (Builder $query) => $query->whereNotNull('performed_work')->where('performed_work', '<>', ''),
+                'closures',
             ])
+            // Klienci z godzinami — część jest zamknięta, gdy zamknięto ją dla każdego z nich.
+            ->addSelect(['clients_count' => DB::table('time_entries')
+                ->join('projects', 'projects.id', '=', 'time_entries.project_id')
+                ->whereColumn('time_entries.work_week_id', 'work_weeks.id')
+                ->selectRaw('count(distinct projects.contractor_id)')])
             ->when($this->status === 'open', fn (Builder $query) => $query->whereNull('closed_at'))
             ->when($this->status === 'closed', fn (Builder $query) => $query->whereNotNull('closed_at'))
             ->orderByDesc('iso_year')
@@ -124,7 +130,7 @@ new #[Title('Weeks')] class extends Component {
                 <flux:table.row :key="$week->id">
                     @if ($this->canCreateTimesheet())
                         <flux:table.cell>
-                            @if ($week->isClosed())
+                            @if ($week->closures_count > 0)
                                 <flux:checkbox wire:model.live="selected" :value="(string) $week->id" />
                             @endif
                         </flux:table.cell>
@@ -141,9 +147,13 @@ new #[Title('Weeks')] class extends Component {
                         </flux:badge>
                     </flux:table.cell>
                     <flux:table.cell>
-                        <flux:badge size="sm" :color="$week->isClosed() ? 'green' : 'zinc'" :icon="$week->isClosed() ? 'lock-closed' : 'lock-open'">
-                            {{ $week->isClosed() ? __('Closed') : str(__('open'))->ucfirst() }}
-                        </flux:badge>
+                        @if ($week->isClosed())
+                            <flux:badge size="sm" color="green" icon="lock-closed">{{ __('Closed') }}</flux:badge>
+                        @elseif ($week->closures_count > 0)
+                            <flux:badge size="sm" color="amber" icon="lock-open">{{ __(':closed of :total clients closed', ['closed' => $week->closures_count, 'total' => $week->clients_count]) }}</flux:badge>
+                        @else
+                            <flux:badge size="sm" color="zinc" icon="lock-open">{{ str(__('open'))->ucfirst() }}</flux:badge>
+                        @endif
                     </flux:table.cell>
                     <flux:table.cell align="end">
                         <flux:button size="sm" variant="ghost" icon="arrow-right" :href="route('weeks.show', $week)" wire:navigate :aria-label="__('Open')" />

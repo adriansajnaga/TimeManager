@@ -43,7 +43,7 @@ final class SettlementService
     public function billableWeeks(Contractor $contractor): Collection
     {
         return WorkWeek::query()
-            ->closed()
+            ->closedFor($contractor)
             ->whereNull('invoiced_at')
             ->whereHas('timeEntries', fn (Builder $entries) => $entries->whereHas('project', fn (Builder $projects) => $this->hourlyProjectsOf($projects, $contractor)))
             ->whereDoesntHave('settlements', fn (Builder $settlements) => $settlements->where('contractor_id', $contractor->id))

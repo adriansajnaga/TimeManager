@@ -57,7 +57,7 @@ test('assigned employee saves performed work, remaining work and materials', fun
 
 test('a week cannot be closed until every project is described', function () {
     showWeek($this->admin, $this->week)
-        ->call('close')
+        ->call('close', $this->project->contractor_id)
         ->assertHasErrors(['close']);
 
     expect($this->week->fresh()->isClosed())->toBeFalse();
@@ -67,19 +67,47 @@ test('a week cannot be closed until every project is described', function () {
         ['performed_work' => 'Repschalter montiert.'],
     );
 
-    showWeek($this->admin, $this->week)->call('close')->assertHasNoErrors();
+    showWeek($this->admin, $this->week)->call('close', $this->project->contractor_id)->assertHasNoErrors();
 
     expect($this->week->fresh()->isClosed())->toBeTrue()
         ->and($this->week->fresh()->closed_by)->toBe($this->admin->id);
 });
 
+test('each client closes separately and only their projects need descriptions', function () {
+    $other = Project::factory()->create(['number' => '160226099']);
+    TimeEntry::factory()->for($this->employee)->for($other)->create(['work_date' => '2026-08-06', 'start_time' => '06:00', 'end_time' => '10:00', 'break_minutes' => 0]);
+    WeeklyReport::query()->updateOrCreate(['work_week_id' => $this->week->id, 'project_id' => $other->id], ['performed_work' => 'Kabel gezogen.']);
+
+    // Projekt pierwszego klienta bez opisu nie blokuje zamknięcia drugiego.
+    showWeek($this->admin, $this->week)
+        ->assertSee($other->contractor->name)
+        ->assertSee($this->project->contractor->name)
+        ->call('close', $other->contractor_id)
+        ->assertHasNoErrors()
+        ->assertSee(__(':closed of :total clients closed', ['closed' => 1, 'total' => 2]));
+
+    $this->week->refresh();
+    expect($this->week->isClosedFor($other->contractor_id))->toBeTrue()
+        ->and($this->week->isClosedFor($this->project->contractor_id))->toBeFalse()
+        ->and($this->week->isClosed())->toBeFalse();
+
+    // Raport zamkniętego klienta tylko do odczytu, drugiego — dalej edytowalny.
+    $closedReport = WeeklyReport::query()->where('project_id', $other->id)->sole();
+    $openReport = WeeklyReport::query()->where('project_id', $this->project->id)->sole();
+    expect($this->admin->can('update', $closedReport))->toBeFalse()
+        ->and($this->admin->can('update', $openReport))->toBeTrue();
+
+    showWeek($this->admin, $this->week)->call('reopen', $other->contractor_id)->assertHasNoErrors();
+    expect($this->week->fresh()->isClosedFor($other->contractor_id))->toBeFalse();
+});
+
 test('only administrators close and reopen weeks', function () {
-    showWeek($this->employee, $this->week)->call('close')->assertForbidden();
+    showWeek($this->employee, $this->week)->call('close', $this->project->contractor_id)->assertForbidden();
 
     $this->week->close($this->admin);
 
-    showWeek($this->employee, $this->week)->call('reopen')->assertForbidden();
-    showWeek($this->admin, $this->week)->call('reopen')->assertHasNoErrors();
+    showWeek($this->employee, $this->week)->call('reopen', $this->project->contractor_id)->assertForbidden();
+    showWeek($this->admin, $this->week)->call('reopen', $this->project->contractor_id)->assertHasNoErrors();
 
     expect($this->week->fresh()->isClosed())->toBeFalse();
 });

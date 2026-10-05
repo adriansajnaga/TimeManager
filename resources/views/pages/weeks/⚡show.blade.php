@@ -3,6 +3,7 @@
 use App\Enums\Permission;
 use App\Models\AiSetting;
 use App\Models\AiUsageLog;
+use App\Models\Contractor;
 use App\Models\MaterialEntry;
 use App\Models\Project;
 use App\Models\TimeEntry;
@@ -248,12 +249,42 @@ new class extends Component {
         Flux::toast(variant: 'success', text: __('Report saved.'));
     }
 
-    public function close(): void
+    /**
+     * Klienci z godzinami w tej części tygodnia (pracownik — z jego projektów) ze stanem zamknięcia.
+     *
+     * @return Collection<int, Contractor>
+     */
+    #[Computed]
+    public function clients(): Collection
+    {
+        $hours = TimeEntry::query()
+            ->join('projects', 'projects.id', '=', 'time_entries.project_id')
+            ->where('time_entries.work_week_id', $this->workWeek->id)
+            ->when(! $this->seesAll(), fn ($query) => $query->whereIn('time_entries.project_id', $this->reports->pluck('project_id')))
+            ->groupBy('projects.contractor_id')
+            ->selectRaw('projects.contractor_id as client_id, SUM(time_entries.hours) as total')
+            ->pluck('total', 'client_id');
+
+        $closures = $this->workWeek->closures()->with('closedBy')->get()->keyBy('contractor_id');
+
+        return Contractor::query()->whereIn('id', $hours->keys())->orderBy('name')->get()
+            ->each(function (Contractor $client) use ($hours, $closures) {
+                $client->setAttribute('week_hours', (string) $hours[$client->id]);
+                $client->setRelation('weekClosure', $closures->get($client->id));
+            });
+    }
+
+    public function close(int $contractorId): void
     {
         $this->authorize('close-weeks');
 
-        // Każdy projekt z godzinami w tej części (wszystkich osób) musi mieć opisane prace.
-        $withHours = TimeEntry::query()->where('work_week_id', $this->workWeek->id)->distinct()->pluck('project_id');
+        // Każdy projekt klienta z godzinami w tej części (wszystkich osób) musi mieć opisane prace.
+        $withHours = TimeEntry::query()->where('work_week_id', $this->workWeek->id)
+            ->whereHas('project', fn ($projects) => $projects->where('contractor_id', $contractorId))
+            ->distinct()->pluck('project_id');
+
+        abort_if($withHours->isEmpty(), 404);
+
         $described = WeeklyReport::query()
             ->where('work_week_id', $this->workWeek->id)
             ->whereNotNull('performed_work')
@@ -268,7 +299,7 @@ new class extends Component {
         }
 
         $withoutKm = collect(app(MileageCalculator::class)->trips(collect([$this->workWeek])))
-            ->filter(fn (MileageTrip $trip) => $trip->needsKm())
+            ->filter(fn (MileageTrip $trip) => $trip->client->id === $contractorId && $trip->needsKm())
             ->map(fn (MileageTrip $trip) => $trip->date->format('d.m'));
 
         if ($withoutKm->isNotEmpty()) {
@@ -277,22 +308,30 @@ new class extends Component {
             return;
         }
 
-        $this->workWeek->close(Auth::user());
-        Flux::toast(variant: 'success', text: __('Week closed.'));
+        $this->workWeek->closeFor($contractorId, Auth::user());
+        $this->refreshState();
+        Flux::toast(variant: 'success', text: __('Week closed for :client.', ['client' => Contractor::query()->whereKey($contractorId)->value('name')]));
     }
 
-    public function reopen(): void
+    public function reopen(int $contractorId): void
     {
         $this->authorize('close-weeks');
 
-        if ($this->workWeek->settlements()->exists()) {
+        if ($this->workWeek->settlements()->where('contractor_id', $contractorId)->exists()) {
             $this->addError('close', __('This week is already settled. Delete the draft invoice of the settlement first.'));
 
             return;
         }
 
-        $this->workWeek->reopen();
-        Flux::toast(variant: 'success', text: __('Week reopened.'));
+        $this->workWeek->reopenFor($contractorId);
+        $this->refreshState();
+        Flux::toast(variant: 'success', text: __('Week reopened for :client.', ['client' => Contractor::query()->whereKey($contractorId)->value('name')]));
+    }
+
+    private function refreshState(): void
+    {
+        $this->workWeek->refresh();
+        unset($this->clients, $this->reports, $this->mileageTrips);
     }
 
     /**
@@ -309,10 +348,9 @@ new class extends Component {
     public function saveMileage(string $key): void
     {
         $this->authorize('log-own-time');
-        abort_if($this->workWeek->isClosed(), 403);
-
         $trip = collect($this->mileageTrips)->first(fn (MileageTrip $trip) => $trip->key() === $key);
         abort_if($trip === null, 404);
+        abort_if($this->workWeek->isClosedFor($trip->client), 403);
 
         $this->validate([
             "mileageKm.{$key}" => ['nullable', 'numeric', 'min:0', 'max:9999', 'decimal:0,1'],
@@ -384,9 +422,14 @@ new class extends Component {
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-            <flux:badge :color="$workWeek->isClosed() ? 'green' : 'zinc'" :icon="$workWeek->isClosed() ? 'lock-closed' : 'lock-open'">
-                {{ $workWeek->isClosed() ? __('Closed') : str(__('open'))->ucfirst() }}
-            </flux:badge>
+            @php($closedCount = $this->clients->filter(fn ($client) => $client->weekClosure !== null)->count())
+            @if ($this->clients->isNotEmpty() && $closedCount === $this->clients->count())
+                <flux:badge color="green" icon="lock-closed">{{ __('Closed') }}</flux:badge>
+            @elseif ($closedCount > 0)
+                <flux:badge color="amber" icon="lock-open">{{ __(':closed of :total clients closed', ['closed' => $closedCount, 'total' => $this->clients->count()]) }}</flux:badge>
+            @else
+                <flux:badge color="zinc" icon="lock-open">{{ str(__('open'))->ucfirst() }}</flux:badge>
+            @endif
 
             @if ($this->reports->isNotEmpty())
                 <flux:button size="sm" icon="document-arrow-down" :href="route('documents.montageauftraege', $workWeek)" target="_blank">
@@ -394,21 +437,48 @@ new class extends Component {
                 </flux:button>
             @endif
 
-            @can('close-weeks')
-                @if ($workWeek->isClosed())
-                    <flux:button size="sm" icon="lock-open" wire:click="reopen" wire:confirm="{{ __('Reopen this week? Entries will become editable again.') }}">
-                        {{ __('Reopen') }}
-                    </flux:button>
-                @else
-                    <flux:button size="sm" variant="primary" icon="lock-closed" wire:click="close" data-test="close-week-button">
-                        {{ __('Close week') }}
-                    </flux:button>
-                @endif
-            @endcan
         </div>
     </div>
 
-    <flux:error name="close" />
+    {{-- Zamykanie osobno dla każdego klienta --}}
+    @if ($this->clients->isNotEmpty())
+        <flux:card class="space-y-3">
+            <flux:heading>{{ __('Closing per client') }}</flux:heading>
+            <div class="divide-y divide-zinc-200 dark:divide-zinc-700">
+                @foreach ($this->clients as $client)
+                    <div wire:key="client-{{ $client->id }}" class="flex flex-wrap items-center justify-between gap-3 py-2">
+                        <div class="min-w-0">
+                            <div class="font-medium">{{ $client->name }}</div>
+                            <div class="text-sm text-zinc-500">
+                                {{ Hours::format((string) $client->week_hours) }} h
+                                @if ($client->weekClosure)
+                                    · {{ __('closed :date', ['date' => $client->weekClosure->closed_at->format('d.m.Y H:i')]) }}@if ($client->weekClosure->closedBy) ({{ $client->weekClosure->closedBy->name }})@endif
+                                @endif
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <flux:badge size="sm" :color="$client->weekClosure ? 'green' : 'zinc'" :icon="$client->weekClosure ? 'lock-closed' : 'lock-open'">
+                                {{ $client->weekClosure ? __('Closed') : str(__('open'))->ucfirst() }}
+                            </flux:badge>
+                            @can('close-weeks')
+                                @if ($client->weekClosure)
+                                    <flux:button size="sm" icon="lock-open" wire:click="reopen({{ $client->id }})"
+                                        wire:confirm="{{ __('Reopen this week for :client? Their entries will become editable again.', ['client' => $client->name]) }}">
+                                        {{ __('Reopen') }}
+                                    </flux:button>
+                                @else
+                                    <flux:button size="sm" variant="primary" icon="lock-closed" wire:click="close({{ $client->id }})" data-test="close-week-button-{{ $client->id }}">
+                                        {{ __('Close week') }}
+                                    </flux:button>
+                                @endif
+                            @endcan
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+            <flux:error name="close" />
+        </flux:card>
+    @endif
 
     @if ($this->timeRecords->isNotEmpty())
         <div class="flex flex-wrap items-center gap-2 text-sm">
@@ -441,27 +511,28 @@ new class extends Component {
                 </flux:table.columns>
                 <flux:table.rows>
                     @foreach ($this->mileageTrips as $trip)
+                        @php($tripClosed = $workWeek->isClosedFor($trip->client))
                         <flux:table.row :key="'trip-'.$trip->key()">
                             <flux:table.cell>{{ $trip->date->format('d.m.Y') }}</flux:table.cell>
                             @if ($this->seesAll())
                                 <flux:table.cell>{{ $trip->user->name }}</flux:table.cell>
                             @endif
                             <flux:table.cell class="min-w-80">
-                                @if ($workWeek->isClosed())
+                                @if ($tripClosed)
                                     {{ $trip->route }}
                                 @else
                                     <flux:input size="sm" wire:model="mileageRoute.{{ $trip->key() }}" />
                                 @endif
                             </flux:table.cell>
                             <flux:table.cell align="end" class="w-28">
-                                @if ($workWeek->isClosed())
+                                @if ($tripClosed)
                                     {{ $trip->kmLabel() ?: '—' }}
                                 @else
                                     <flux:input size="sm" wire:model="mileageKm.{{ $trip->key() }}" inputmode="decimal" :invalid="$trip->needsKm()" :placeholder="__('km')" />
                                 @endif
                             </flux:table.cell>
                             <flux:table.cell align="end">
-                                @unless ($workWeek->isClosed())
+                                @unless ($tripClosed)
                                     <flux:button size="sm" variant="ghost" icon="check" wire:click="saveMileage('{{ $trip->key() }}')" :aria-label="__('Save')" />
                                 @endunless
                             </flux:table.cell>

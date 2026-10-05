@@ -92,9 +92,9 @@ test('employee cannot log time on a project they are not assigned to', function 
         ->assertHasErrors(['form.project_id']);
 });
 
-test('no new entries in a closed week part', function () {
+test('no new entries for a client whose week part is closed', function () {
     $admin = User::factory()->admin()->create();
-    WorkWeek::forDate(CarbonImmutable::parse('2026-08-03'))->close($admin);
+    WorkWeek::forDate(CarbonImmutable::parse('2026-08-03'))->closeFor($this->project->contractor_id, $admin);
 
     weekPage($this->employee)
         ->call('create', '2026-08-04', $this->project->id)
@@ -103,6 +103,36 @@ test('no new entries in a closed week part', function () {
         ->set('form.break_minutes', 0)
         ->call('save')
         ->assertHasErrors(['form.work_date']);
+});
+
+test('late hours of another client go into a week part closed for a different client', function () {
+    $admin = User::factory()->admin()->create();
+    TimeEntry::factory()->for($this->employee)->for($this->project)->create(['work_date' => '2026-08-03', 'start_time' => '06:00', 'end_time' => '14:00', 'break_minutes' => 0]);
+    $week = WorkWeek::forDate(CarbonImmutable::parse('2026-08-03'));
+    $week->close($admin);
+
+    expect($week->fresh()->isClosed())->toBeTrue();
+
+    $other = Project::factory()->create();
+    $other->users()->attach($this->employee);
+
+    weekPage($this->employee)
+        ->call('create', '2026-08-04', $other->id)
+        ->set('form.start_time', '07:00')
+        ->set('form.end_time', '15:00')
+        ->set('form.break_minutes', 0)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    // Część nie jest już zamknięta dla wszystkich; nowy klient ma ją otwartą, pierwszy — zamkniętą.
+    $week->refresh();
+    expect($week->isClosed())->toBeFalse()
+        ->and($week->isClosedFor($this->project->contractor_id))->toBeTrue()
+        ->and($week->isClosedFor($other->contractor_id))->toBeFalse()
+        ->and(TimeEntry::query()->where('project_id', $other->id)->sole()->isLocked())->toBeFalse();
+
+    $week->closeFor($other->contractor_id, $admin);
+    expect($week->fresh()->isClosed())->toBeTrue();
 });
 
 test('entries in a closed week are locked for everybody', function () {

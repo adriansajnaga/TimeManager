@@ -261,8 +261,9 @@ new #[Title('Working time')] class extends Component {
         </flux:heading>
 
         @foreach ($this->parts as $part)
-            <flux:badge size="sm" :color="$part->isClosed() ? 'green' : 'zinc'" :icon="$part->isClosed() ? 'lock-closed' : 'lock-open'">
-                {{ $part->starts_on->translatedFormat('F') }}: {{ $part->isClosed() ? __('closed') : __('open') }}
+            @php($partly = ! $part->isClosed() && $part->closures()->exists())
+            <flux:badge size="sm" :color="$part->isClosed() ? 'green' : ($partly ? 'amber' : 'zinc')" :icon="$part->isClosed() ? 'lock-closed' : 'lock-open'">
+                {{ $part->starts_on->translatedFormat('F') }}: {{ $part->isClosed() ? __('closed') : ($partly ? __('partly closed') : __('open')) }}
             </flux:badge>
         @endforeach
 

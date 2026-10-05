@@ -133,7 +133,7 @@ test('a settled week cannot be reopened', function () {
 
     Livewire::actingAs($this->admin)
         ->test('pages::weeks.show', ['workWeek' => $this->weeks->first()])
-        ->call('reopen')
+        ->call('reopen', $this->gaertner->id)
         ->assertHasErrors('close');
 
     expect($this->weeks->first()->fresh()->isClosed())->toBeTrue();
@@ -158,7 +158,14 @@ test('a week shared with another client stays billable for that client', functio
 
     $shared = WorkWeek::forDate(now()->setDate(2026, 8, 7));
 
+    // Godziny drugiego klienta dopisane do części zamkniętej dla Gärtnera — u niego trzeba ją zamknąć osobno.
     expect($shared->fresh()->invoiced_at)->toBeNull()
+        ->and($shared->fresh()->isClosed())->toBeFalse()
+        ->and(app(SettlementService::class)->billableWeeks($other))->toBeEmpty();
+
+    $shared->closeFor($other, $this->admin);
+
+    expect($shared->fresh()->isClosed())->toBeTrue()
         ->and(app(SettlementService::class)->billableWeeks($other)->pluck('id')->all())->toBe([$shared->id]);
 });
 
@@ -168,7 +175,7 @@ test('closing a week needs kilometres for days with several projects', function 
     MileageDay::query()->delete();
 
     $page = Livewire::actingAs($this->admin)->test('pages::weeks.show', ['workWeek' => $week])
-        ->call('close')
+        ->call('close', $this->gaertner->id)
         ->assertHasErrors('close');
 
     expect($week->fresh()->isClosed())->toBeFalse();
@@ -178,7 +185,7 @@ test('closing a week needs kilometres for days with several projects', function 
     $page->set("mileageKm.{$key}", '165')
         ->call('saveMileage', $key)
         ->assertHasNoErrors()
-        ->call('close')
+        ->call('close', $this->gaertner->id)
         ->assertHasNoErrors();
 
     expect($week->fresh()->isClosed())->toBeTrue()

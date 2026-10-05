@@ -14,7 +14,7 @@ class WeeklyReportPolicy
      */
     public function update(User $user, WeeklyReport $report): bool
     {
-        if ($report->workWeek->isClosed()) {
+        if ($report->workWeek->isClosedFor($report->project->contractor_id)) {
             return false;
         }
 

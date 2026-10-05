@@ -66,6 +66,18 @@ class TimeEntry extends Model
             $entry->hours = self::calculateHours($entry->start_time, $entry->end_time, $entry->break_minutes);
             $entry->work_week_id = WorkWeek::forDate($entry->work_date)->id;
         });
+
+        // Godziny nowego klienta w zamkniętej części — część nie jest już zamknięta dla wszystkich.
+        static::saved(fn (TimeEntry $entry) => $entry->syncWeeks());
+        static::deleted(fn (TimeEntry $entry) => $entry->syncWeeks());
+    }
+
+    private function syncWeeks(): void
+    {
+        WorkWeek::query()
+            ->whereIn('id', array_filter([$this->work_week_id, $this->getOriginal('work_week_id')]))
+            ->get()
+            ->each(fn (WorkWeek $week) => $week->syncClosedState());
     }
 
     /**
@@ -117,9 +129,12 @@ class TimeEntry extends Model
         return substr($this->end_time, 0, 5);
     }
 
+    /**
+     * Część tygodnia zamknięta dla klienta projektu.
+     */
     public function isLocked(): bool
     {
-        return $this->workWeek->isClosed();
+        return $this->workWeek->isClosedFor($this->project->contractor_id);
     }
 
     /**

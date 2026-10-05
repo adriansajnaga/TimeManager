@@ -170,8 +170,11 @@ class TimeEntryForm extends Form
                 ->where('month', $date->month)
                 ->first();
 
-            if ($week?->isClosed()) {
-                $fail(__('This week is closed. Ask the administrator to reopen it.'));
+            // Zamknięcie dotyczy klienta projektu — godziny innego klienta można dopisać.
+            $contractorId = $this->project_id ? Project::query()->whereKey($this->project_id)->value('contractor_id') : null;
+
+            if ($week !== null && $contractorId !== null && $week->isClosedFor((int) $contractorId)) {
+                $fail(__('This week is closed for this client. Ask the administrator to reopen it.'));
             }
         };
     }

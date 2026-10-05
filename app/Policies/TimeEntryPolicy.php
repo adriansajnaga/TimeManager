@@ -13,7 +13,7 @@ class TimeEntryPolicy
      */
     public function update(User $user, TimeEntry $entry): bool
     {
-        if ($entry->workWeek->isClosed()) {
+        if ($entry->isLocked()) {
             return false;
         }
 

@@ -399,7 +399,7 @@ final class LegacyImporter
             $stamp = $row->TIMESTAMP ? CarbonImmutable::parse($row->TIMESTAMP) : now();
 
             if (! $week->isClosed()) {
-                $week->forceFill(['closed_at' => $stamp, 'closed_by' => $this->owner?->id])->save();
+                $week->close($this->owner, $stamp);
                 $this->report->add('weeks', 'closed');
             }
 

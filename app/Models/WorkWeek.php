@@ -88,9 +88,24 @@ class WorkWeek extends Model
         return $day->betweenIncluded($this->starts_on, $this->ends_on);
     }
 
+    /**
+     * Zamknięta dla wszystkich klientów, którzy mają w niej godziny.
+     */
     public function isClosed(): bool
     {
         return $this->closed_at !== null;
+    }
+
+    /**
+     * Zamknięta dla klienta — jego godzin, raportów i kilometrówki nie można już zmieniać.
+     */
+    public function isClosedFor(Contractor|int $contractor): bool
+    {
+        $id = $contractor instanceof Contractor ? $contractor->id : $contractor;
+
+        return $this->relationLoaded('closures')
+            ? $this->closures->contains('contractor_id', $id)
+            : $this->closures()->where('contractor_id', $id)->exists();
     }
 
     /**
@@ -115,14 +130,76 @@ class WorkWeek extends Model
         return $this->invoiced_at !== null;
     }
 
-    public function close(User $user): void
+    /**
+     * Klienci (id) z godzinami w tej części tygodnia.
+     *
+     * @return list<int>
+     */
+    public function clientIds(): array
     {
-        $this->forceFill(['closed_at' => now(), 'closed_by' => $user->id])->save();
+        return array_values(array_map('intval', Project::query()
+            ->whereIn('id', $this->timeEntries()->select('project_id'))
+            ->distinct()
+            ->orderBy('contractor_id')
+            ->pluck('contractor_id')
+            ->all()));
+    }
+
+    public function closeFor(Contractor|int $contractor, ?User $user, ?CarbonInterface $at = null): void
+    {
+        $this->closures()->firstOrCreate(
+            ['contractor_id' => $contractor instanceof Contractor ? $contractor->id : $contractor],
+            ['closed_at' => $at ?? now(), 'closed_by' => $user?->id],
+        );
+
+        $this->unsetRelation('closures');
+        $this->syncClosedState($user, $at);
+    }
+
+    public function reopenFor(Contractor|int $contractor): void
+    {
+        $this->closures()->where('contractor_id', $contractor instanceof Contractor ? $contractor->id : $contractor)->delete();
+
+        $this->unsetRelation('closures');
+        $this->syncClosedState();
+    }
+
+    /**
+     * Zamyka dla wszystkich klientów z godzinami (import, dane wzorcowe).
+     */
+    public function close(?User $user, ?CarbonInterface $at = null): void
+    {
+        foreach ($this->clientIds() as $contractorId) {
+            $this->closures()->firstOrCreate(['contractor_id' => $contractorId], ['closed_at' => $at ?? now(), 'closed_by' => $user?->id]);
+        }
+
+        $this->unsetRelation('closures');
+        $this->syncClosedState($user, $at);
     }
 
     public function reopen(): void
     {
-        $this->forceFill(['closed_at' => null, 'closed_by' => null])->save();
+        $this->closures()->delete();
+
+        $this->unsetRelation('closures');
+        $this->syncClosedState();
+    }
+
+    /**
+     * closed_at = zamknięta dla wszystkich klientów z godzinami (lista tygodni, pulpit, filtr).
+     * Dopisanie godzin nowego klienta do zamkniętej części otwiera ją znowu „częściowo”.
+     */
+    public function syncClosedState(?User $user = null, ?CarbonInterface $at = null): void
+    {
+        $clients = $this->clientIds();
+        $closed = $this->closures()->pluck('contractor_id')->map(fn ($id) => (int) $id)->all();
+        $allClosed = $clients !== [] && array_diff($clients, $closed) === [];
+
+        if ($allClosed && $this->closed_at === null) {
+            $this->forceFill(['closed_at' => $at ?? now(), 'closed_by' => $user?->id])->save();
+        } elseif (! $allClosed && $this->closed_at !== null) {
+            $this->forceFill(['closed_at' => null, 'closed_by' => null])->save();
+        }
     }
 
     /**
@@ -131,6 +208,24 @@ class WorkWeek extends Model
     public function scopeClosed(Builder $query): void
     {
         $query->whereNotNull('closed_at');
+    }
+
+    /**
+     * Części zamknięte dla klienta.
+     *
+     * @param  Builder<WorkWeek>  $query
+     */
+    public function scopeClosedFor(Builder $query, Contractor|int $contractor): void
+    {
+        $query->whereHas('closures', fn (Builder $closures) => $closures->where('contractor_id', $contractor instanceof Contractor ? $contractor->id : $contractor));
+    }
+
+    /**
+     * @return HasMany<WorkWeekClosure, $this>
+     */
+    public function closures(): HasMany
+    {
+        return $this->hasMany(WorkWeekClosure::class);
     }
 
     /**
