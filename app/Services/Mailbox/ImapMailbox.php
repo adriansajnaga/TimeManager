@@ -51,7 +51,7 @@ final class ImapMailbox implements Mailbox
                     $unseen = null;
                 }
 
-                $folders[] = new MailFolder($folder->path, $this->folderName($folder), $unseen, $this->isTrash($folder));
+                $folders[] = new MailFolder($folder->path, $this->folderName($folder), $unseen, $this->isTrash($folder), $this->isSpam($folder));
             }
 
             usort($folders, fn (MailFolder $a, MailFolder $b) => [strtoupper($a->path) !== 'INBOX', $a->isTrash, $a->name] <=> [strtoupper($b->path) !== 'INBOX', $b->isTrash, $b->name]);
@@ -136,6 +136,35 @@ final class ImapMailbox implements Mailbox
         $this->guard(function () use ($folder, $uid, $seen) {
             $message = $this->fetch($folder, $uid, withBody: false);
             $seen ? $message->setFlag('Seen') : $message->unsetFlag('Seen');
+        });
+    }
+
+    public function emptyFolder(string $folder): int
+    {
+        return $this->guard(function () use ($folder) {
+            $imapFolder = $this->folder($folder);
+
+            if (! $this->isTrash($imapFolder) && ! $this->isSpam($imapFolder)) {
+                throw new MailboxException(__('Only Trash and Spam can be emptied.'));
+            }
+
+            $count = (int) ($imapFolder->status()['messages'] ?? 0);
+
+            if ($count === 0) {
+                return 0;
+            }
+
+            $connection = $this->client()->getConnection();
+
+            if (! $connection instanceof ImapProtocol) {
+                throw new MailboxException(__('Mail server error: :message', ['message' => 'IMAP']));
+            }
+
+            $this->client()->openFolder($imapFolder->path, true);
+            $connection->requestAndResponse('STORE', ['1:*', '+FLAGS.SILENT', '(\Deleted)'])->validate();
+            $connection->expunge()->validate();
+
+            return $count;
         });
     }
 
@@ -366,6 +395,11 @@ final class ImapMailbox implements Mailbox
     private function isSent(Folder $folder): bool
     {
         return MailFolder::looksLikeSent($folder->path) || MailFolder::looksLikeSent($folder->full_name);
+    }
+
+    private function isSpam(Folder $folder): bool
+    {
+        return MailFolder::looksLikeSpam($folder->path) || MailFolder::looksLikeSpam($folder->full_name);
     }
 
     private function isTrash(Folder $folder): bool

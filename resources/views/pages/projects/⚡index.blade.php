@@ -36,7 +36,9 @@ new #[Title('Projects')] class extends Component {
     #[Computed]
     public function projects(): LengthAwarePaginator
     {
+        // Nierozliczone na górze, w grupie od najmłodszego.
         return Project::query()
+            ->withUnsettled()
             ->with('contractor')
             ->withCount('users')
             ->when($this->search !== '', fn ($query) => $query->where(function ($query) {
@@ -47,6 +49,7 @@ new #[Title('Projects')] class extends Component {
             }))
             ->when($this->contractor !== '', fn ($query) => $query->where('contractor_id', $this->contractor))
             ->when($this->status !== '', fn ($query) => $query->where('status', $this->status))
+            ->orderByDesc('is_unsettled')
             ->latest('id')
             ->paginate(25);
     }
@@ -110,6 +113,9 @@ new #[Title('Projects')] class extends Component {
                     </flux:table.cell>
                     <flux:table.cell class="max-w-72 truncate">
                         {{ $project->name }}
+                        @if ($project->is_unsettled)
+                            <flux:badge size="sm" color="amber" class="ms-2">{{ __('Unsettled') }}</flux:badge>
+                        @endif
                         @if ($project->status === ProjectStatus::Closed)
                             <flux:badge size="sm" color="zinc" class="ms-2">{{ $project->status->label() }}</flux:badge>
                         @endif

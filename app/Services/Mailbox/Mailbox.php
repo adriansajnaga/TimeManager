@@ -50,6 +50,13 @@ interface Mailbox
     public function delete(string $folder, int $uid): bool;
 
     /**
+     * Usuwa na stałe wszystkie wiadomości z Kosza albo Spamu; zwraca ich liczbę.
+     *
+     * @throws MailboxException gdy folder nie jest Koszem ani Spamem
+     */
+    public function emptyFolder(string $folder): int;
+
+    /**
      * Zapisuje kopię wysłanej wiadomości (surowy MIME) w folderze Wysłane, jako przeczytaną.
      *
      * @throws MailboxException

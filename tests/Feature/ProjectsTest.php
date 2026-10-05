@@ -3,6 +3,7 @@
 use App\Enums\ProjectBillingType;
 use App\Models\Contractor;
 use App\Models\Project;
+use App\Models\TimeEntry;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -146,4 +147,16 @@ test('the invoice shows the place of work when a project has no label', function
     expect($project->invoiceLabel())->toBe('TKMS GmbH')
         ->and(Project::factory()->make(['invoice_label' => 'TKMS Halle 9'])->invoiceLabel())->toBe('TKMS Halle 9')
         ->and(Project::factory()->make(['invoice_label' => null, 'site_name' => null, 'site_city' => 'Kiel'])->invoiceLabel())->toBe('Kiel');
+});
+
+test('unsettled projects come first and are marked', function () {
+    $admin = User::factory()->admin()->create();
+    $settled = Project::factory()->create(['number' => '160200001', 'name' => 'Ohne Stunden']);
+    $unsettled = Project::factory()->create(['number' => '160200002', 'name' => 'Mit offenen Stunden']);
+    TimeEntry::factory()->for($admin)->for($unsettled)->create(['work_date' => '2026-08-05']);
+    $newest = Project::factory()->create(['number' => '160200003', 'name' => 'Neuestes']);
+
+    Livewire::actingAs($admin)->test('pages::projects.index')
+        ->assertSeeInOrder(['Mit offenen Stunden', 'Neuestes', 'Ohne Stunden'])
+        ->assertSee(__('Unsettled'));
 });

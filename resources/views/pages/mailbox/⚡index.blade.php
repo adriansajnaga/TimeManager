@@ -122,6 +122,27 @@ new #[Title('Mailbox')] class extends Component {
     }
 
     /**
+     * „Usuń wszystkie” w Koszu i Spamie — na stałe.
+     */
+    public function emptyFolder(): void
+    {
+        $this->authorize('use-mailbox');
+
+        try {
+            $count = app(Mailbox::class)->emptyFolder($this->folder);
+        } catch (MailboxException $exception) {
+            Flux::toast(variant: 'danger', text: $exception->getMessage());
+
+            return;
+        }
+
+        $this->uid = 0;
+        $this->page = 1;
+        unset($this->messages, $this->folders);
+        Flux::toast(text: trans_choice(':count message deleted.|:count messages deleted.', $count, ['count' => $count]));
+    }
+
+    /**
      * @return list<MailFolder>
      */
     #[Computed]
@@ -202,6 +223,12 @@ new #[Title('Mailbox')] class extends Component {
 
         <div class="flex flex-wrap items-center gap-2">
             <flux:input wire:model.live.debounce.400ms="search" icon="magnifying-glass" :placeholder="__('Search in subject and sender')" class="max-w-xs" />
+            @if ($this->currentFolder()?->canBeEmptied() && ($result['total'] ?? 0) > 0)
+                <flux:button icon="trash" variant="danger" wire:click="emptyFolder"
+                    wire:confirm="{{ __('Permanently delete all :count messages in :folder? This cannot be undone.', ['count' => $result['total'], 'folder' => $this->currentFolder()->name]) }}">
+                    {{ __('Delete all') }}
+                </flux:button>
+            @endif
             <flux:button icon="arrow-path" wire:click="refresh" :aria-label="__('Refresh')" />
         </div>
     </div>

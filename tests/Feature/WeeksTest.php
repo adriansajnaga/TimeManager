@@ -147,3 +147,11 @@ test('material rows require a description', function () {
 
     expect(MaterialEntry::count())->toBe(0);
 });
+
+test('open week parts are listed first', function () {
+    $older = TimeEntry::factory()->for($this->employee)->for($this->project)->create(['work_date' => '2026-07-01'])->workWeek;
+    $this->week->close($this->admin);
+
+    Livewire::actingAs($this->admin)->test('pages::weeks.index')
+        ->assertSeeInOrder([$older->label(), $this->week->label()]);
+});

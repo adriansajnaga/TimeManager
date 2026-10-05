@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\InvoiceKind;
+use App\Enums\InvoiceStatus;
 use App\Enums\Permission;
 use App\Enums\ProjectBillingType;
 use App\Enums\ProjectStatus;
@@ -67,6 +69,45 @@ class Project extends Model
     public function scopeActive(Builder $query): void
     {
         $query->where('status', ProjectStatus::Active);
+    }
+
+    /**
+     * Dodaje kolumnę is_unsettled: godzinowy — godziny w części tygodnia bez rozliczenia tego klienta
+     * (i niezafakturowanej w starej aplikacji); ryczałtowy — aktywny bez wystawionej faktury rozliczeniowej.
+     *
+     * @param  Builder<Project>  $query
+     */
+    public function scopeWithUnsettled(Builder $query): void
+    {
+        $hourly = <<<'SQL'
+            EXISTS (
+                SELECT 1 FROM time_entries te
+                JOIN work_weeks ww ON ww.id = te.work_week_id
+                WHERE te.project_id = projects.id
+                  AND ww.invoiced_at IS NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM settlement_work_week sww
+                      JOIN settlements s ON s.id = sww.settlement_id
+                      WHERE sww.work_week_id = ww.id AND s.contractor_id = projects.contractor_id
+                  )
+            )
+            SQL;
+
+        $fixed = <<<'SQL'
+            projects.status = ? AND NOT EXISTS (
+                SELECT 1 FROM invoices i
+                WHERE i.project_id = projects.id AND i.kind = ? AND i.status = ?
+            )
+            SQL;
+
+        if ($query->getQuery()->columns === null) {
+            $query->select('projects.*');
+        }
+
+        $query->selectRaw(
+            "CASE WHEN projects.billing_type = ? THEN ($fixed) ELSE ($hourly) END AS is_unsettled",
+            [ProjectBillingType::Fixed->value, ProjectStatus::Active->value, InvoiceKind::Final->value, InvoiceStatus::Issued->value],
+        );
     }
 
     /**

@@ -56,6 +56,8 @@ new #[Title('Weeks')] class extends Component {
                 ->selectRaw('count(distinct projects.contractor_id)')])
             ->when($this->status === 'open', fn (Builder $query) => $query->whereNull('closed_at'))
             ->when($this->status === 'closed', fn (Builder $query) => $query->whereNotNull('closed_at'))
+            // Niezamknięte (także częściowo) na górze.
+            ->orderByRaw('closed_at IS NULL DESC')
             ->orderByDesc('iso_year')
             ->orderByDesc('iso_week')
             ->orderByDesc('month')

@@ -9,7 +9,24 @@ final class MailFolder
         public readonly string $name,
         public readonly ?int $unseen = null,
         public readonly bool $isTrash = false,
+        public readonly bool $isSpam = false,
     ) {}
+
+    /**
+     * Kosz i Spam można opróżnić jednym przyciskiem.
+     */
+    public function canBeEmptied(): bool
+    {
+        return $this->isTrash || $this->isSpam;
+    }
+
+    /**
+     * Spam po nazwie (Spam, Junk, Junk E-mail, Wiadomości-śmieci), także jako INBOX.spam.
+     */
+    public static function looksLikeSpam(string $path): bool
+    {
+        return preg_match('/(^|[.\/])(spam|junk( e-?mail)?|wiadomości-śmieci|wiadomosci-smieci)$/iu', $path) === 1;
+    }
 
     /**
      * Folder wysłanych po nazwie (Sent, Sent Items, Wysłane, Gesendet…), także jako INBOX.Sent.

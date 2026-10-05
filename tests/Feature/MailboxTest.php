@@ -47,6 +47,16 @@ function fakeMailbox(?string $failWith = null): object
             $this->appended[] = $rawMessage;
         }
 
+        /** @var list<string> */
+        public array $emptied = [];
+
+        public function emptyFolder(string $folder): int
+        {
+            $this->emptied[] = $folder;
+
+            return 3;
+        }
+
         public function delete(string $folder, int $uid): bool
         {
             $this->deleted[] = [$folder, $uid];
@@ -58,7 +68,7 @@ function fakeMailbox(?string $failWith = null): object
         {
             $this->failIfNeeded();
 
-            return [new MailFolder('INBOX', 'Inbox', 1), new MailFolder('INBOX.Sent', 'Sent', 0), new MailFolder('INBOX.Trash', 'Trash', 0, true)];
+            return [new MailFolder('INBOX', 'Inbox', 1), new MailFolder('INBOX.Sent', 'Sent', 0), new MailFolder('INBOX.spam', 'Spam', 0, isSpam: true), new MailFolder('INBOX.Trash', 'Trash', 0, true)];
         }
 
         public function messages(string $folder, int $page, int $perPage, string $search = ''): array
@@ -74,7 +84,10 @@ function fakeMailbox(?string $failWith = null): object
                 $messages = array_values(array_filter($messages, fn (MailSummary $message) => str_contains(mb_strtolower($message->subject), mb_strtolower($search))));
             }
 
-            return ['messages' => $folder === 'INBOX' ? $messages : [], 'total' => $folder === 'INBOX' ? count($messages) : 0];
+            // Kosz i Spam mają wiadomości (przycisk „Usuń wszystkie”), Wysłane są puste.
+            $withMessages = in_array($folder, ['INBOX', 'INBOX.Trash', 'INBOX.spam'], true);
+
+            return ['messages' => $withMessages ? $messages : [], 'total' => $withMessages ? count($messages) : 0];
         }
 
         public function message(string $folder, int $uid): MailMessage
@@ -282,4 +295,23 @@ test('after a rejected login the mailbox does not retry until the password is sa
     ImapMailbox::resumeLogin();
 
     expect(Cache::has('mailbox.login-paused'))->toBeFalse();
+});
+
+test('trash and spam can be emptied at once, other folders cannot', function () {
+    $fake = fakeMailbox();
+
+    $page = Livewire::actingAs($this->admin)->test('pages::mailbox.index')
+        ->assertDontSee(__('Delete all'))
+        ->call('openFolder', 'INBOX.Trash')
+        ->assertSee(__('Delete all'))
+        ->call('emptyFolder');
+
+    $page->call('openFolder', 'INBOX.spam')
+        ->assertSee(__('Delete all'))
+        ->call('emptyFolder');
+
+    expect($fake->emptied)->toBe(['INBOX.Trash', 'INBOX.spam'])
+        ->and(MailFolder::looksLikeSpam('INBOX.Junk'))->toBeTrue()
+        ->and(MailFolder::looksLikeSpam('INBOX.spam'))->toBeTrue()
+        ->and(MailFolder::looksLikeSpam('INBOX'))->toBeFalse();
 });
