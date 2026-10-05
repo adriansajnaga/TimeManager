@@ -24,6 +24,8 @@ test('active users can log in', function () {
     $this->assertAuthenticatedAs($user);
 });
 
-test('home redirects to the dashboard', function () {
-    $this->get(route('home'))->assertRedirect(route('dashboard'));
+test('home shows the start page to guests and redirects users to the dashboard', function () {
+    $this->get(route('home'))->assertOk()->assertSee('MANAGER')->assertSee(route('login'), false);
+
+    $this->actingAs(User::factory()->create())->get(route('home'))->assertRedirect(route('dashboard'));
 });

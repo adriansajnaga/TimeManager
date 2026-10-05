@@ -15,6 +15,9 @@ return [
 
     'name' => env('APP_NAME', 'Laravel'),
 
+    // Podpis pod nazwą aplikacji na ekranach logowania.
+    'brand_owner' => env('APP_BRAND_OWNER', 'ASCOMM Adrian Sajnaga'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

@@ -8,7 +8,8 @@ use App\Http\Controllers\MailboxController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', fn () => redirect()->route('dashboard'))->name('home');
+// Gość widzi stronę startową z przyciskiem logowania, zalogowany — pulpit.
+Route::get('/', fn () => auth()->check() ? redirect()->route('dashboard') : view('welcome'))->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
