@@ -2,12 +2,11 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasAttachments;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * Notatka w kartotekach z dowolnymi plikami.
@@ -22,10 +21,11 @@ use Illuminate\Support\Facades\Storage;
 #[Fillable(['user_id', 'title', 'body'])]
 class Note extends Model
 {
-    protected static function booted(): void
+    use HasAttachments;
+
+    public function attachmentDirectory(): string
     {
-        // Pliki znikają razem z notatką (wiersze usuwa kaskada w bazie).
-        static::deleting(fn (Note $note) => Storage::disk('local')->deleteDirectory(NoteAttachment::DIRECTORY.'/'.$note->id));
+        return 'notes/'.$this->id;
     }
 
     /**
@@ -34,13 +34,5 @@ class Note extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
-    }
-
-    /**
-     * @return HasMany<NoteAttachment, $this>
-     */
-    public function attachments(): HasMany
-    {
-        return $this->hasMany(NoteAttachment::class)->orderBy('name');
     }
 }

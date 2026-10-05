@@ -1,24 +1,16 @@
 <?php
 
+use App\Livewire\ComponentWithAttachments;
+use App\Models\Contractor;
 use App\Models\Note;
-use App\Models\NoteAttachment;
 use Flux\Flux;
-use Illuminate\Support\Str;
-use Livewire\Component;
-use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
-use Livewire\WithFileUploads;
 
-new class extends Component {
-    use WithFileUploads;
-
+new class extends ComponentWithAttachments {
     public ?Note $note = null;
 
     public string $title = '';
 
     public string $body = '';
-
-    /** @var list<TemporaryUploadedFile> */
-    public array $uploads = [];
 
     public function mount(?Note $note = null): void
     {
@@ -61,40 +53,6 @@ new class extends Component {
         $this->note = $note->refresh();
     }
 
-    /**
-     * W istniejącej notatce pliki dołączamy od razu po wybraniu.
-     */
-    public function updatedUploads(): void
-    {
-        if ($this->note === null) {
-            return;
-        }
-
-        $this->authorize('manage-notes');
-        $this->validate($this->uploadRules());
-
-        $this->storeUploads($this->note);
-        $this->note->touch();
-
-        Flux::toast(variant: 'success', text: __('Files attached.'));
-    }
-
-    public function removeUpload(int $index): void
-    {
-        unset($this->uploads[$index]);
-        $this->uploads = array_values($this->uploads);
-    }
-
-    public function deleteAttachment(int $id): void
-    {
-        $this->authorize('manage-notes');
-
-        $this->note?->attachments()->whereKey($id)->first()?->delete();
-        $this->note?->touch();
-
-        Flux::toast(variant: 'success', text: __('File deleted.'));
-    }
-
     public function delete(): void
     {
         $this->authorize('manage-notes');
@@ -105,36 +63,14 @@ new class extends Component {
         $this->redirectRoute('notes.index', navigate: true);
     }
 
-    /**
-     * @return array<string, list<string>>
-     */
-    private function uploadRules(): array
+    protected function attachmentOwner(): Note|Contractor|null
     {
-        return [
-            'uploads' => ['array', 'max:20'],
-            'uploads.*' => ['file', 'max:'.NoteAttachment::MAX_KB],
-        ];
+        return $this->note;
     }
 
-    private function storeUploads(Note $note): void
+    protected function attachmentPermission(): string
     {
-        foreach ($this->uploads as $file) {
-            $extension = strtolower($file->getClientOriginalExtension());
-            $stored = $file->storeAs(
-                NoteAttachment::DIRECTORY.'/'.$note->id,
-                Str::uuid()->toString().($extension !== '' ? '.'.$extension : ''),
-                'local',
-            );
-
-            $note->attachments()->create([
-                'name' => Str::limit($file->getClientOriginalName(), 250, ''),
-                'path' => (string) $stored,
-                'mime' => (string) ($file->getMimeType() ?? 'application/octet-stream'),
-                'size' => (int) $file->getSize(),
-            ]);
-        }
-
-        $this->uploads = [];
+        return 'manage-notes';
     }
 }; ?>
 
@@ -165,54 +101,6 @@ new class extends Component {
             <flux:textarea wire:model="body" :label="__('Text')" rows="14" resize="vertical" />
         </flux:card>
 
-        <flux:card class="space-y-4">
-            <div>
-                <flux:heading>{{ __('Files') }}</flux:heading>
-                <flux:text size="sm">{{ __('Any file type, up to :size MB each.', ['size' => NoteAttachment::MAX_KB / 1024]) }}</flux:text>
-            </div>
-
-            @if ($note && $note->attachments->isNotEmpty())
-                <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    @foreach ($note->attachments as $attachment)
-                        @php([$icon, $color] = $attachment->icon())
-                        <div wire:key="attachment-{{ $attachment->id }}" class="flex items-center gap-3 rounded-lg border border-zinc-200 p-2 dark:border-zinc-700">
-                            <flux:icon :name="$icon" class="size-8 shrink-0 {{ $color }}" />
-                            <div class="min-w-0 flex-1">
-                                <div class="truncate text-sm" title="{{ $attachment->name }}">{{ $attachment->name }}</div>
-                                <div class="text-xs text-zinc-500">{{ strtoupper(pathinfo($attachment->name, PATHINFO_EXTENSION) ?: $attachment->kind()) }} · {{ $attachment->sizeLabel() }}</div>
-                            </div>
-                            @if ($attachment->previewable())
-                                <flux:button size="xs" variant="ghost" icon="eye" target="_blank" :aria-label="__('Open')"
-                                    :href="route('notes.attachment', ['attachment' => $attachment, 'inline' => 1])" />
-                            @endif
-                            <flux:button size="xs" variant="ghost" icon="arrow-down-tray" :aria-label="__('Download')"
-                                :href="route('notes.attachment', $attachment)" />
-                            <flux:button size="xs" variant="ghost" icon="trash" :aria-label="__('Delete')"
-                                wire:click="deleteAttachment({{ $attachment->id }})"
-                                wire:confirm="{{ __('Delete the file :name?', ['name' => $attachment->name]) }}" />
-                        </div>
-                    @endforeach
-                </div>
-            @endif
-
-            <flux:input type="file" wire:model="uploads" multiple :label="$note ? __('Attach files') : __('Files to attach on save')" />
-
-            <div wire:loading wire:target="uploads" class="text-sm text-zinc-500">{{ __('Uploading…') }}</div>
-
-            @if ($uploads !== [])
-                <ul class="space-y-1 text-sm">
-                    @foreach ($uploads as $index => $upload)
-                        <li wire:key="upload-{{ $index }}" class="flex items-center gap-2">
-                            <flux:icon.paper-clip variant="micro" class="text-zinc-400" />
-                            <span class="truncate">{{ $upload->getClientOriginalName() }}</span>
-                            <flux:button size="xs" variant="subtle" icon="x-mark" wire:click="removeUpload({{ $index }})" :aria-label="__('Remove')" />
-                        </li>
-                    @endforeach
-                </ul>
-            @endif
-
-            <flux:error name="uploads" />
-            <flux:error name="uploads.*" />
-        </flux:card>
+        <x-attachments :owner="$note" :uploads="$uploads" />
     </form>
 </section>

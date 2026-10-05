@@ -6,21 +6,19 @@ use App\Enums\InvoiceLineMode;
 use App\Enums\Language;
 use App\Enums\PackageDocument;
 use App\Enums\VatCode;
+use App\Livewire\ComponentWithAttachments;
 use App\Livewire\Forms\ContractorForm;
 use App\Models\BankAccount;
 use App\Models\Contractor;
+use App\Models\Note;
 use App\Models\Vehicle;
 use Flux\Flux;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Computed;
-use Livewire\Component;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
-use Livewire\WithFileUploads;
 
-new class extends Component {
-    use WithFileUploads;
-
+new class extends ComponentWithAttachments {
     public ContractorForm $form;
 
     /** Logo do nagłówka dokumentów klienta (np. Stundennachweis). */
@@ -34,7 +32,7 @@ new class extends Component {
     public function save(): void
     {
         $this->authorize('manage-contractors');
-        $this->validate(['logo' => ['nullable', 'image', 'mimes:png,jpg,jpeg', 'max:2048']]);
+        $this->validate(['logo' => ['nullable', 'image', 'mimes:png,jpg,jpeg', 'max:2048'], ...$this->uploadRules()]);
 
         $creating = $this->form->contractor === null;
         $contractor = $this->form->save();
@@ -49,6 +47,8 @@ new class extends Component {
             ]);
             $this->logo = null;
         }
+
+        $this->storeUploads($contractor);
 
         Flux::toast(variant: 'success', text: __('Contractor saved.'));
 
@@ -131,6 +131,16 @@ new class extends Component {
     public function vehicles(): Collection
     {
         return Vehicle::query()->orderBy('name')->get();
+    }
+
+    protected function attachmentOwner(): Note|Contractor|null
+    {
+        return $this->form->contractor;
+    }
+
+    protected function attachmentPermission(): string
+    {
+        return 'manage-contractors';
     }
 
     public function render()
@@ -331,6 +341,8 @@ new class extends Component {
                 :description="__('Placeholders: {number} (invoice number), {date} (issue date), {sender}.')"
             />
         </flux:card>
+
+        <x-attachments :owner="$form->contractor" :uploads="$uploads" :heading="__('Attached documents')" />
 
         <flux:card>
             <flux:textarea wire:model="form.notes" :label="__('Notes')" rows="3" />

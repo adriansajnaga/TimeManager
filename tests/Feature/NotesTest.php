@@ -1,7 +1,8 @@
 <?php
 
+use App\Models\Attachment;
+use App\Models\Contractor;
 use App\Models\Note;
-use App\Models\NoteAttachment;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -43,8 +44,8 @@ test('admin creates a note with files', function () {
     expect($pdf->kind())->toBe('pdf');
 
     $this->get(route('notes.index'))->assertOk()->assertSee('Lürssen — dane dostępowe do placu');
-    $this->get(route('notes.attachment', $pdf))->assertOk()->assertDownload('umowa.pdf');
-    $this->get(route('notes.attachment', ['attachment' => $pdf, 'inline' => 1]))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+    $this->get(route('attachments.show', $pdf))->assertOk()->assertDownload('umowa.pdf');
+    $this->get(route('attachments.show', ['attachment' => $pdf, 'inline' => 1]))->assertOk()->assertHeader('Content-Type', 'application/pdf');
 });
 
 test('files picked in an existing note are attached right away and can be deleted', function () {
@@ -60,7 +61,7 @@ test('files picked in an existing note are attached right away and can be delete
 
     $component->call('deleteAttachment', $attachment->id);
 
-    expect(NoteAttachment::query()->count())->toBe(0);
+    expect(Attachment::query()->count())->toBe(0);
     Storage::disk('local')->assertMissing($attachment->path);
 });
 
@@ -78,7 +79,7 @@ test('deleting a note removes its files', function () {
         ->assertRedirect(route('notes.index'));
 
     expect(Note::query()->count())->toBe(0)
-        ->and(NoteAttachment::query()->count())->toBe(0);
+        ->and(Attachment::query()->count())->toBe(0);
     Storage::disk('local')->assertMissing($path);
 });
 
@@ -94,4 +95,44 @@ test('search finds notes by text and file name', function () {
         ->assertSee('Kiel')
         ->assertSee('Wolgast')
         ->assertDontSee('Bremen');
+});
+
+test('contractor record keeps attached documents', function () {
+    $this->actingAs($this->admin);
+    $contractor = Contractor::factory()->create();
+
+    Livewire::test('pages::contractors.form', ['contractor' => $contractor])
+        ->set('uploads', [UploadedFile::fake()->create('Rahmenvertrag 2026.pdf', 200, 'application/pdf')])
+        ->assertHasNoErrors()
+        ->assertSee('Rahmenvertrag 2026.pdf');
+
+    $document = $contractor->attachments()->sole();
+    expect($document->path)->toStartWith('contractors/'.$contractor->id.'/documents/');
+
+    $this->get(route('attachments.show', $document))->assertOk()->assertDownload('Rahmenvertrag 2026.pdf');
+
+    // Plik kontrahenta wymaga uprawnienia do kontrahentów.
+    $this->actingAs(User::factory()->create())->get(route('attachments.show', $document))->assertForbidden();
+
+    $this->actingAs($this->admin);
+    $contractor->delete();
+
+    expect(Attachment::query()->count())->toBe(0);
+    Storage::disk('local')->assertMissing($document->path);
+});
+
+test('new contractor gets files chosen before the first save', function () {
+    $this->actingAs($this->admin);
+
+    Livewire::test('pages::contractors.form')
+        ->set('form.name', 'Neptun Werft GmbH')
+        ->set('form.street', 'Werftallee 13')
+        ->set('form.zip', '18119')
+        ->set('form.city', 'Rostock')
+        ->set('form.country_code', 'de')
+        ->set('uploads', [UploadedFile::fake()->create('Stammdaten.xlsx', 15)])
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect(Contractor::query()->where('name', 'Neptun Werft GmbH')->sole()->attachments)->toHaveCount(1);
 });

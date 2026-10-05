@@ -1,10 +1,10 @@
 <?php
 
+use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\ContractorLogoController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\MailboxController;
-use App\Http\Controllers\NoteAttachmentController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -41,8 +41,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('notes', 'pages::notes.index')->name('notes.index');
         Route::livewire('notes/create', 'pages::notes.form')->name('notes.create');
         Route::livewire('notes/{note}', 'pages::notes.form')->name('notes.edit');
-        Route::get('notes/attachments/{attachment}', NoteAttachmentController::class)->name('notes.attachment');
     });
+
+    // Uprawnienie zależy od właściciela pliku (notatka, kontrahent) — sprawdza kontroler.
+    Route::get('attachments/{attachment}', AttachmentController::class)->name('attachments.show');
 
     Route::middleware('can:manage-projects')->group(function () {
         Route::livewire('projects', 'pages::projects.index')->name('projects.index');

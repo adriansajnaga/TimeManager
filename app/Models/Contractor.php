@@ -8,6 +8,7 @@ use App\Enums\InvoiceLineMode;
 use App\Enums\Language;
 use App\Enums\PackageDocument;
 use App\Enums\VatCode;
+use App\Models\Concerns\HasAttachments;
 use App\Models\Concerns\LogsActivity;
 use Database\Factories\ContractorFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -65,7 +66,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Contractor extends Model
 {
     /** @use HasFactory<ContractorFactory> */
-    use HasFactory, LogsActivity;
+    use HasAttachments, HasFactory, LogsActivity;
+
+    public function attachmentDirectory(): string
+    {
+        return 'contractors/'.$this->id.'/documents';
+    }
 
     /**
      * Get the attributes that should be cast.
