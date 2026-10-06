@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * @property int $id
  * @property int $circuit_id
+ * @property int|null $marker_id
  * @property int $position
  * @property string|null $symbol
  * @property string|null $location
@@ -20,8 +21,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $impedance
  * @property string|null $impedance_npe
  * @property-read MeasurementCircuit $circuit
+ * @property-read MeasurementMarker|null $marker
  */
-#[Fillable(['position', 'symbol', 'location', 'loop', 'impedance', 'impedance_npe'])]
+#[Fillable(['marker_id', 'position', 'symbol', 'location', 'loop', 'impedance', 'impedance_npe'])]
 class MeasurementPoint extends Model
 {
     public const LOOPS = ['L-PE', 'L-N', 'L-L'];
@@ -57,6 +59,14 @@ class MeasurementPoint extends Model
     private static function number(?string $value): ?float
     {
         return $value === null ? null : (float) $value;
+    }
+
+    /**
+     * @return BelongsTo<MeasurementMarker, $this>
+     */
+    public function marker(): BelongsTo
+    {
+        return $this->belongsTo(MeasurementMarker::class, 'marker_id');
     }
 
     /**

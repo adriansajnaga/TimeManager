@@ -188,6 +188,14 @@ class MeasurementProtocol extends Model implements Attachable
     }
 
     /**
+     * @return HasMany<MeasurementMarker, $this>
+     */
+    public function markers(): HasMany
+    {
+        return $this->hasMany(MeasurementMarker::class, 'protocol_id')->orderBy('number');
+    }
+
+    /**
      * @return HasMany<MeasurementCableTest, $this>
      */
     public function cableTests(): HasMany

@@ -156,3 +156,51 @@ test('the report PDF contains the results, and a copy keeps the structure withou
         ->and(MeasurementPoint::query()->where('circuit_id', $copiedCircuit->id)->sole()->impedance)->toBeNull()
         ->and($copy->earthings()->sole()->resistance)->toBeNull();
 });
+
+test('points are marked on the plan and sockets next to each other share one number', function () {
+    $protocol = newProtocol($this->admin);
+    $board = $protocol->boards()->create(['position' => 1, 'name' => 'UV1']);
+    $circuit = $board->circuits()->create(['position' => 1, 'number' => '2F4', 'name' => 'Salon', 'protection_type' => ProtectionType::B, 'protection_current' => 16]);
+    $g1 = $circuit->points()->create(['position' => 1, 'symbol' => 'G1', 'location' => 'Salon - gniazdo', 'impedance' => '1.2']);
+    $g2 = $circuit->points()->create(['position' => 2, 'symbol' => 'G2', 'location' => 'Salon - gniazdo', 'impedance' => '1.3']);
+    $o1 = $circuit->points()->create(['position' => 3, 'symbol' => 'O1', 'location' => 'Salon - oświetlenie']);
+
+    $page = Livewire::actingAs($this->admin)->test('pages::measurements.board', ['protocol' => $protocol, 'board' => $board]);
+
+    // Bez rzutu — podpowiedź, żeby go dodać.
+    $page->call('openPlan', $g1->id)->assertSet('planPoint', null);
+
+    Livewire::actingAs($this->admin)->test('pages::measurements.show', ['protocol' => $protocol])
+        ->set('uploads', [UploadedFile::fake()->image('rzut.png', 800, 600)]);
+    $plan = $protocol->attachments()->sole();
+
+    $page = Livewire::actingAs($this->admin)->test('pages::measurements.board', ['protocol' => $protocol, 'board' => $board])
+        ->call('openPlan', $g1->id)
+        ->assertSet('planId', $plan->id)
+        ->call('placeMarker', 25.5, 40.0);
+
+    $marker = $protocol->markers()->sole();
+    expect($marker->number)->toBe(1)->and((float) $marker->x)->toBe(25.5)->and($g1->fresh()->marker_id)->toBe($marker->id);
+
+    // G2 obok G1 — ten sam numer; O1 — nowy numer.
+    $page->call('openPlan', $g2->id)->call('assignMarker', $marker->id)
+        ->call('openPlan', $o1->id)->call('placeMarker', 70, 20);
+
+    expect($g2->fresh()->marker_id)->toBe($marker->id)
+        ->and($o1->fresh()->marker->number)->toBe(2)
+        ->and($marker->points()->count())->toBe(2);
+
+    $page->call('moveMarker', $marker->id, 30, 45);
+    expect((float) $marker->fresh()->x)->toBe(30.0);
+
+    // Raport z rzutem ze znacznikami i kolumną „Rzut”.
+    $this->get(route('measurements.report', $protocol))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+    expect(glob(storage_path('app/mpdf/plan-*.png')))->toBe([]);
+
+    // Odpięcie O1 usuwa pusty znacznik 2; usunięcie G1 i G2 — znacznik 1.
+    $page->call('openPlan', $o1->id)->call('unassignPoint');
+    expect($protocol->markers()->pluck('number')->all())->toBe([1]);
+
+    $page->call('deletePoint', $g1->id)->call('deletePoint', $g2->id);
+    expect($protocol->markers()->count())->toBe(0);
+});

@@ -87,7 +87,7 @@
             <p class="params">Wyniki przeprowadzonych prób: {{ $params }}</p>
             <table class="grid">
                 <tr>
-                    <th width="5%">Lp.</th><th width="29%">Badany punkt</th><th width="8%">Symbol</th><th width="9%">Zabezp. nr</th><th width="6%">Typ</th><th width="6%">In<br>[A]</th><th width="7%">Ia<br>[A]</th>
+                    <th width="5%">Lp.</th><th width="{{ $hasMarkers ? 24 : 29 }}%">Badany punkt</th><th width="8%">Symbol</th>@if ($hasMarkers)<th width="5%">Rzut</th>@endif<th width="9%">Zabezp. nr</th><th width="6%">Typ</th><th width="6%">In<br>[A]</th><th width="7%">Ia<br>[A]</th>
                     <th width="7%">Zs<br>[Ω]</th><th width="7%">Za<br>[Ω]</th><th width="6%">Ik<br>[A]</th><th width="10%">Ocena</th>
                 </tr>
                 @php($lp = 0)
@@ -102,6 +102,9 @@
                             <td>{{ ++$lp }}</td>
                             <td class="left">{{ $point->location ?: $circuit->name }}</td>
                             <td>{{ $point->symbol }}</td>
+                            @if ($hasMarkers)
+                                <td>{{ $point->marker?->number }}</td>
+                            @endif
                             @if ($index === 0)
                                 <td rowspan="{{ $points->count() }}">{{ $circuit->number }}</td>
                                 <td rowspan="{{ $points->count() }}">{{ $circuit->protection_type?->label() }}</td>
@@ -121,7 +124,10 @@
         @endif
     @endforeach
     <table class="legend" style="margin-top: 3mm;">
-        <tr><td>Symbol</td><td>Symbol badanego punktu naniesiony na rzucie obiektu</td></tr>
+        <tr><td>Symbol</td><td>Symbol badanego punktu (gniazdo G, oświetlenie O, faza L)</td></tr>
+        @if ($hasMarkers)
+            <tr><td>Rzut</td><td>Numer punktu na rzucie w załącznikach (kilka gniazd obok siebie ma wspólny numer)</td></tr>
+        @endif
         <tr><td>Ia</td><td>Prąd powodujący samoczynne zadziałanie zabezpieczenia w wymaganym czasie</td></tr>
         <tr><td>Zs</td><td>Zmierzona impedancja pętli zwarcia</td></tr>
         <tr><td>Za</td><td>Wymagana impedancja pętli zwarcia Za = Uo/Ia</td></tr>

@@ -26,13 +26,18 @@ final class ReportRenderer
 
     private string $footer = '';
 
+    /** @var list<string> Tymczasowe obrazy rzutów ze znacznikami (usuwane po złożeniu PDF). */
+    private array $temporary = [];
+
+    public function __construct(private readonly PlanImage $planImage) {}
+
     public function render(MeasurementProtocol $protocol): string
     {
         // Świeży odczyt: domyślne wartości kolumn (UL, ta) i aktualne wyniki.
         $protocol->refresh();
         $protocol->load([
             'contractor', 'instrument.attachments', 'performers.attachments', 'inspections', 'attachments',
-            'boards.rcds', 'boards.circuits.points', 'boards.circuits.rcd', 'earthings', 'continuities', 'cableTests',
+            'boards.rcds', 'boards.circuits.points.marker', 'boards.circuits.rcd', 'markers', 'earthings', 'continuities', 'cableTests',
         ]);
 
         $data = $this->data($protocol);
@@ -72,7 +77,12 @@ final class ReportRenderer
 
         $this->appendAttachments($mpdf, $data);
 
-        return $mpdf->Output('', Destination::STRING_RETURN);
+        try {
+            return $mpdf->Output('', Destination::STRING_RETURN);
+        } finally {
+            array_map(fn (string $path) => File::delete($path), $this->temporary);
+            $this->temporary = [];
+        }
     }
 
     public function filename(MeasurementProtocol $protocol): string
@@ -126,6 +136,7 @@ final class ReportRenderer
             'hasInsulation' => $hasInsulation,
             'hasRcd' => $hasRcd,
             'hasSupply' => $hasSupply,
+            'hasMarkers' => $protocol->markers->isNotEmpty(),
             'sections' => $sections,
             'drawings' => $drawings,
             'otherAttachments' => $otherAttachments,
@@ -146,7 +157,7 @@ final class ReportRenderer
         $others = $data['otherAttachments'];
 
         foreach ($drawings->values() as $index => $attachment) {
-            $this->appendFile($mpdf, $attachment, 'ZAŁĄCZNIK '.($index + 1), $attachment->label());
+            $this->appendFile($mpdf, $data['protocol'], $attachment, 'ZAŁĄCZNIK '.($index + 1), $attachment->label());
         }
 
         if ($others->isEmpty()) {
@@ -157,11 +168,11 @@ final class ReportRenderer
         $mpdf->WriteHTML(view('pdf.measurements.other-attachments', $data)->render(), HTMLParserMode::HTML_BODY);
 
         foreach ($others as $attachment) {
-            $this->appendFile($mpdf, $attachment, null, null);
+            $this->appendFile($mpdf, $data['protocol'], $attachment, null, null);
         }
     }
 
-    private function appendFile(Mpdf $mpdf, Attachment $attachment, ?string $title, ?string $caption): void
+    private function appendFile(Mpdf $mpdf, MeasurementProtocol $protocol, Attachment $attachment, ?string $title, ?string $caption): void
     {
         $disk = Storage::disk('local');
 
@@ -172,6 +183,13 @@ final class ReportRenderer
         $path = $disk->path($attachment->path);
 
         if ($attachment->kind() === 'image') {
+            // Rzut ze znacznikami punktów pomiarowych.
+            $markers = $protocol->markers->where('attachment_id', $attachment->id);
+
+            if ($markers->isNotEmpty() && ($annotated = $this->planImage->annotate($attachment, $markers)) !== null) {
+                $this->temporary[] = $path = $annotated;
+            }
+
             $mpdf->AddPageByArray(['margin-top' => 40]);
             $mpdf->WriteHTML(view('pdf.measurements.image', ['title' => $title, 'caption' => $caption, 'path' => $path])->render(), HTMLParserMode::HTML_BODY);
 

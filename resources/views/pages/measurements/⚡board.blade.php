@@ -2,8 +2,10 @@
 
 use App\Enums\ProtectionType;
 use App\Enums\RcdType;
+use App\Models\Attachment;
 use App\Models\MeasurementBoard;
 use App\Models\MeasurementCircuit;
+use App\Models\MeasurementMarker;
 use App\Models\MeasurementPoint;
 use App\Models\MeasurementProtocol;
 use App\Models\MeasurementRcd;
@@ -97,7 +99,7 @@ new class extends Component {
     #[Computed]
     public function circuitModels(): Collection
     {
-        return $this->board->circuits()->with(['points', 'rcd'])->get();
+        return $this->board->circuits()->with(['points.marker', 'rcd'])->get();
     }
 
     /**
@@ -248,6 +250,7 @@ new class extends Component {
     {
         $this->authorize('manage-measurements');
         $this->board->circuits()->whereKey($id)->delete();
+        $this->pruneMarkers();
         $this->open = null;
         $this->refreshState();
     }
@@ -306,9 +309,160 @@ new class extends Component {
     {
         $this->authorize('manage-measurements');
         MeasurementPoint::query()->whereKey($id)->whereIn('circuit_id', $this->board->circuits()->select('id'))->delete();
+        $this->pruneMarkers();
         $this->refreshState();
     }
 
+    // --- Rzut: znaczniki punktów ----------------------------------------------------------------
+
+    /** Punkt, dla którego zaznaczamy miejsce na rzucie. */
+    public ?int $planPoint = null;
+
+    /** Wyświetlany rzut (obraz załączony do protokołu). */
+    public ?int $planId = null;
+
+    /**
+     * Obrazy załączone do protokołu — rzuty do zaznaczania punktów.
+     *
+     * @return Collection<int, Attachment>
+     */
+    #[Computed]
+    public function plans(): Collection
+    {
+        return $this->protocol->attachments()->get()->filter(fn (Attachment $attachment) => $attachment->kind() === 'image')->values();
+    }
+
+    /**
+     * Znaczniki na wyświetlanym rzucie z symbolami ich punktów.
+     *
+     * @return Collection<int, MeasurementMarker>
+     */
+    #[Computed]
+    public function planMarkers(): Collection
+    {
+        return $this->planId === null ? collect() : $this->protocol->markers()->where('attachment_id', $this->planId)->with('points')->get();
+    }
+
+    public function openPlan(int $pointId): void
+    {
+        $point = $this->boardPoint($pointId);
+
+        if ($point === null) {
+            return;
+        }
+
+        if ($this->plans->isEmpty()) {
+            Flux::toast(variant: 'warning', text: __('Add a floor plan image to the protocol first (Drawings and attachments).'));
+
+            return;
+        }
+
+        $this->planPoint = $point->id;
+        $this->planId = $point->marker?->attachment_id ?? ($this->planId !== null && $this->plans->contains('id', $this->planId) ? $this->planId : $this->plans->first()?->id);
+        unset($this->planMarkers);
+
+        Flux::modal('plan')->show();
+    }
+
+    public function showPlan(int $attachmentId): void
+    {
+        if ($this->plans->contains('id', $attachmentId)) {
+            $this->planId = $attachmentId;
+            unset($this->planMarkers);
+        }
+    }
+
+    /** Nowy znacznik w stukniętym miejscu (x, y w % obrazu) dla wybranego punktu. */
+    public function placeMarker(float $x, float $y): void
+    {
+        $this->authorize('manage-measurements');
+        $point = $this->planPoint !== null ? $this->boardPoint($this->planPoint) : null;
+
+        if ($point === null || $this->planId === null || ! $this->plans->contains('id', $this->planId)) {
+            return;
+        }
+
+        $previous = $point->marker;
+        $marker = $this->protocol->markers()->create([
+            'attachment_id' => $this->planId,
+            'number' => MeasurementMarker::nextNumber($this->protocol),
+            'x' => max(0, min(100, $x)),
+            'y' => max(0, min(100, $y)),
+        ]);
+
+        $point->update(['marker_id' => $marker->id]);
+        $this->dropIfEmpty($previous);
+        $this->closePlan();
+    }
+
+    /** Dołącza punkt do istniejącego znacznika (grupa gniazd obok siebie). */
+    public function assignMarker(int $markerId): void
+    {
+        $this->authorize('manage-measurements');
+        $point = $this->planPoint !== null ? $this->boardPoint($this->planPoint) : null;
+        $marker = $this->protocol->markers()->whereKey($markerId)->first();
+
+        if ($point === null || $marker === null) {
+            return;
+        }
+
+        $previous = $point->marker;
+        $point->update(['marker_id' => $marker->id]);
+
+        if ($previous?->id !== $marker->id) {
+            $this->dropIfEmpty($previous);
+        }
+
+        $this->closePlan();
+    }
+
+    public function moveMarker(int $markerId, float $x, float $y): void
+    {
+        $this->authorize('manage-measurements');
+        $this->protocol->markers()->whereKey($markerId)->update(['x' => max(0, min(100, $x)), 'y' => max(0, min(100, $y))]);
+        unset($this->planMarkers);
+    }
+
+    /** Odpina punkt od znacznika (znacznik bez punktów znika). */
+    public function unassignPoint(): void
+    {
+        $this->authorize('manage-measurements');
+        $point = $this->planPoint !== null ? $this->boardPoint($this->planPoint) : null;
+
+        if ($point === null) {
+            return;
+        }
+
+        $previous = $point->marker;
+        $point->update(['marker_id' => null]);
+        $this->dropIfEmpty($previous);
+        $this->closePlan();
+    }
+
+    private function closePlan(): void
+    {
+        $this->planPoint = null;
+        unset($this->planMarkers, $this->circuitModels);
+        Flux::modal('plan')->close();
+    }
+
+    /** Znaczniki bez punktów (po usunięciu punktu lub obwodu) znikają z rzutu. */
+    private function pruneMarkers(): void
+    {
+        $this->protocol->markers()->whereDoesntHave('points')->delete();
+    }
+
+    private function dropIfEmpty(?MeasurementMarker $marker): void
+    {
+        if ($marker !== null && ! $marker->points()->exists()) {
+            $marker->delete();
+        }
+    }
+
+    private function boardPoint(int $id): ?MeasurementPoint
+    {
+        return MeasurementPoint::query()->whereKey($id)->whereIn('circuit_id', $this->board->circuits()->select('id'))->with('marker')->first();
+    }
     public function deleteBoard(): void
     {
         $this->authorize('manage-measurements');
@@ -520,6 +674,7 @@ new class extends Component {
                                         <div class="flex items-center gap-2">
                                             <input type="text" wire:model.blur="points.{{ $point->id }}.location"
                                                 class="mt-0.5 min-w-0 flex-1 border-0 bg-transparent p-0 text-xs text-zinc-500 focus:ring-0" />
+                                            <flux:button size="xs" :variant="$point->marker ? 'filled' : 'ghost'" icon="map-pin" wire:click="openPlan({{ $point->id }})" :aria-label="__('Mark on the plan')">{{ $point->marker?->number }}</flux:button>
                                             <flux:button size="xs" variant="ghost" icon="x-mark" wire:click="deletePoint({{ $point->id }})" :aria-label="__('Delete')" />
                                         </div>
                                     @endunless
@@ -570,6 +725,90 @@ new class extends Component {
     @unless ($board->isSupply())
         <flux:button variant="primary" icon="plus" wire:click="addCircuit" class="w-full">{{ __('Add circuit') }}</flux:button>
     @endunless
+
+    {{-- Rzut: stuknij miejsce (nowy numer) albo istniejący numer (gniazdo dołącza do grupy) --}}
+    <flux:modal name="plan" class="w-full max-w-5xl" x-on:close="$wire.planPoint = null">
+        @php($planPointModel = $planPoint ? MeasurementPoint::query()->with('marker')->find($planPoint) : null)
+        @php($plan = $planId ? $this->plans->firstWhere('id', $planId) : null)
+
+        <div class="space-y-3"
+            x-data="{
+                zoom: 100,
+                moving: null,
+                tap(event) {
+                    const rect = this.$refs.image.getBoundingClientRect();
+                    const x = (event.clientX - rect.left) / rect.width * 100;
+                    const y = (event.clientY - rect.top) / rect.height * 100;
+                    if (this.moving !== null) { this.$wire.moveMarker(this.moving, x, y); this.moving = null; return; }
+                    this.$wire.placeMarker(x, y);
+                },
+            }">
+            <div>
+                <flux:heading size="lg">{{ __('Mark on the plan') }}</flux:heading>
+                @if ($planPointModel)
+                    <flux:text>
+                        <b>{{ $planPointModel->symbol }}</b> · {{ $planPointModel->location }}
+                        — {{ __('tap the spot for a new number, or an existing number to group sockets next to each other') }}
+                    </flux:text>
+                @endif
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                @if ($this->plans->count() > 1)
+                    @foreach ($this->plans as $item)
+                        <flux:button size="sm" :variant="$item->id === $planId ? 'primary' : 'outline'" wire:click="showPlan({{ $item->id }})">{{ $item->label() }}</flux:button>
+                    @endforeach
+                @endif
+                <div class="ms-auto flex items-center gap-1">
+                    <flux:button size="sm" icon="minus" x-on:click="zoom = Math.max(100, zoom - 50)" :aria-label="__('Zoom out')" />
+                    <span class="w-12 text-center text-sm" x-text="zoom + '%'"></span>
+                    <flux:button size="sm" icon="plus" x-on:click="zoom = Math.min(400, zoom + 50)" :aria-label="__('Zoom in')" />
+                </div>
+            </div>
+
+            <div x-show="moving !== null" x-cloak class="rounded-lg bg-amber-100 px-3 py-2 text-sm text-amber-900 dark:bg-amber-500/20 dark:text-amber-200">
+                {{ __('Tap the new position of the marker.') }}
+            </div>
+
+            @if ($plan)
+                <div class="max-h-[65vh] overflow-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+                    <div class="relative" x-bind:style="'width: ' + zoom + '%'">
+                        <img x-ref="image" src="{{ route('attachments.show', ['attachment' => $plan, 'inline' => 1]) }}" alt=""
+                            class="block w-full cursor-crosshair select-none" draggable="false" x-on:click="tap($event)">
+                        @foreach ($this->planMarkers as $marker)
+                            @php($current = $planPointModel?->marker_id === $marker->id)
+                            <button type="button" wire:key="marker-{{ $marker->id }}"
+                                wire:click="assignMarker({{ $marker->id }})"
+                                title="{{ $marker->points->pluck('symbol')->filter()->implode(', ') }}"
+                                style="left: {{ (float) $marker->x }}%; top: {{ (float) $marker->y }}%;"
+                                @class([
+                                    'absolute flex size-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white text-xs font-bold text-white shadow',
+                                    'bg-blue-600 ring-4 ring-blue-300' => $current,
+                                    'bg-red-600' => ! $current,
+                                ])>
+                                {{ $marker->number }}
+                                @if ($marker->points->count() > 1)
+                                    <span class="absolute -right-2 -top-2 rounded-full bg-zinc-900 px-1 text-[0.6rem] leading-4">×{{ $marker->points->count() }}</span>
+                                @endif
+                            </button>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
+            <div class="flex flex-wrap justify-between gap-2">
+                <div class="flex gap-2">
+                    @if ($planPointModel?->marker)
+                        <flux:button size="sm" icon="arrows-pointing-out" x-on:click="moving = {{ $planPointModel->marker->id }}">{{ __('Move marker') }}</flux:button>
+                        <flux:button size="sm" variant="ghost" icon="x-mark" wire:click="unassignPoint">{{ __('Remove from the plan') }}</flux:button>
+                    @endif
+                </div>
+                <flux:modal.close>
+                    <flux:button size="sm" variant="ghost">{{ __('Close') }}</flux:button>
+                </flux:modal.close>
+            </div>
+        </div>
+    </flux:modal>
 
     <datalist id="in-values">
         @foreach ([6, 10, 13, 16, 20, 25, 32, 40, 50, 63, 80, 100, 125, 160] as $value)
