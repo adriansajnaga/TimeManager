@@ -16,14 +16,25 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $kind
  * @property string $name
  * @property string|null $description
+ * @property array<mixed>|null $layout
  * @property-read MeasurementProtocol $protocol
  */
-#[Fillable(['position', 'kind', 'name', 'description'])]
+#[Fillable(['position', 'kind', 'name', 'description', 'layout'])]
 class MeasurementBoard extends Model
 {
     public const KIND_BOARD = 'board';
 
     public const KIND_SUPPLY = 'supply';
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return ['layout' => 'array'];
+    }
 
     public function isSupply(): bool
     {

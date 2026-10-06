@@ -8,6 +8,7 @@ use App\Models\MeasurementPerformer;
 use App\Models\MeasurementPoint;
 use App\Models\MeasurementProtocol;
 use App\Models\User;
+use App\Services\Measurements\BoardLayout;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
@@ -203,4 +204,67 @@ test('points are marked on the plan and sockets next to each other share one num
 
     $page->call('deletePoint', $g1->id)->call('deletePoint', $g2->id);
     expect($protocol->markers()->count())->toBe(0);
+});
+
+test('the board elevation is arranged from RCDs and circuits and can be edited', function () {
+    $protocol = newProtocol($this->admin);
+    $board = $protocol->boards()->create(['position' => 1, 'name' => 'UV1']);
+    $fi1 = $board->rcds()->create(['position' => 1, 'designation' => 'Fi1', 'type' => 'A']);
+    $fi2 = $board->rcds()->create(['position' => 2, 'designation' => 'Fi2', 'type' => 'A']);
+    $pump = $board->circuits()->create(['position' => 1, 'number' => '1F1', 'name' => 'Pompa ciepła', 'phases' => 3, 'rcd_id' => $fi1->id]);
+    $board->circuits()->create(['position' => 2, 'number' => '2F1', 'name' => 'Salon', 'rcd_id' => $fi2->id]);
+    $board->circuits()->create(['position' => 3, 'number' => '2F2', 'name' => 'Sypialnia', 'rcd_id' => $fi2->id]);
+
+    $page = Livewire::actingAs($this->admin)->test('pages::measurements.layout', ['protocol' => $protocol, 'board' => $board]);
+
+    $rows = BoardLayout::for($board->fresh())->resolved();
+    expect(array_column($rows[0], 'label'))->toBe(['Fi1', '1F1'])
+        ->and(array_column($rows[0], 'w'))->toBe([4, 3])
+        ->and(array_column($rows[1], 'label'))->toBe(['Fi2', '2F1', '2F2'])
+        ->and($rows[1][0]['desc'])->toBe('Różnicówka zabezpiecza obwody 2F1, 2F2')
+        ->and($rows[1][1]['desc'])->toBe('SALON')
+        ->and($board->fresh()->layout['report'])->toBeTrue();
+
+    // F0 i WG na nowej szynie, przesunięcie obwodu, nowy obwód dochodzi sam na szynę swojego RCD.
+    $page->call('addRow')->call('addItem', 'device', 'F0')->call('addItem', 'device', 'WG')
+        ->call('select', 1, 2)->call('shift', -1);
+
+    $board->circuits()->create(['position' => 4, 'number' => '2F3', 'name' => 'Hubert', 'rcd_id' => $fi2->id]);
+    $pump->delete();
+
+    $rows = BoardLayout::for($board->fresh())->resolved();
+    expect(array_column($rows[0], 'label'))->toBe(['Fi1'])
+        ->and(array_column($rows[1], 'label'))->toBe(['Fi2', '2F2', '2F1', '2F3'])
+        ->and(array_column($rows[2], 'label'))->toBe(['F0', 'WG'])
+        ->and($rows[2][0]['desc'])->toBe('Bezpiecznik główny');
+
+    $this->actingAs($this->admin)->get(route('measurements.layout', [$protocol, $board]))->assertOk()->assertSee('Fi2');
+    $this->get(route('measurements.legend', [$protocol, $board]))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+    $this->get(route('measurements.report', $protocol))->assertOk();
+});
+
+test('Ia is filled in from the protection and a different value is kept as manual', function () {
+    $protocol = newProtocol($this->admin);
+    $board = $protocol->boards()->create(['position' => 1, 'name' => 'UV1']);
+
+    $page = Livewire::actingAs($this->admin)->test('pages::measurements.board', ['protocol' => $protocol, 'board' => $board])
+        ->call('addCircuit');
+    $circuit = $board->circuits()->sole();
+
+    // Domyślnie B16 → 80 A.
+    $page->assertSet("circuits.{$circuit->id}.trip_current_override", '80')
+        ->set("circuits.{$circuit->id}.protection_type", 'C')
+        ->assertSet("circuits.{$circuit->id}.trip_current_override", '160')
+        ->set("circuits.{$circuit->id}.protection_current", '20')
+        ->assertSet("circuits.{$circuit->id}.trip_current_override", '200');
+
+    expect($circuit->fresh()->trip_current_override)->toBeNull();
+
+    // Wartość z katalogu — zapamiętana; wyczyszczenie wraca do wyliczonej.
+    $page->set("circuits.{$circuit->id}.trip_current_override", '150');
+    expect((float) $circuit->fresh()->trip_current_override)->toBe(150.0);
+
+    $page->set("circuits.{$circuit->id}.trip_current_override", '')
+        ->assertSet("circuits.{$circuit->id}.trip_current_override", '200');
+    expect($circuit->fresh()->trip_current_override)->toBeNull();
 });

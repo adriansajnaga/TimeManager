@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AttachmentController;
+use App\Http\Controllers\BoardLegendController;
 use App\Http\Controllers\ContractorLogoController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\InvoiceController;
@@ -49,6 +50,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('measurements/{protocol}', 'pages::measurements.show')->name('measurements.show');
         Route::livewire('measurements/{protocol}/edit', 'pages::measurements.form')->name('measurements.edit');
         Route::livewire('measurements/{protocol}/boards/{board}', 'pages::measurements.board')->name('measurements.board');
+        Route::livewire('measurements/{protocol}/boards/{board}/layout', 'pages::measurements.layout')->name('measurements.layout');
+        Route::get('measurements/{protocol}/boards/{board}/legend', BoardLegendController::class)->name('measurements.legend');
         Route::get('measurements/{protocol}/report', MeasurementReportController::class)->name('measurements.report');
     });
 

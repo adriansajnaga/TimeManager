@@ -122,6 +122,7 @@ final class ReportRenderer
             'Warunki przeprowadzonych prób i kryteria oceny',
             'Akty prawne i dokumenty normalizacyjne',
             $drawings->isNotEmpty() ? 'Rzuty i rysunki (załączniki)' : null,
+            $boards->contains(fn (MeasurementBoard $board) => (bool) ($board->layout['report'] ?? false)) ? 'Rozmieszczenie zabezpieczeń w rozdzielnicach' : null,
             $protocol->performers->contains(fn (MeasurementPerformer $performer) => $performer->attachments->isNotEmpty()) ? 'Kserokopie uprawnień osób przeprowadzających badania' : null,
             ($protocol->instrument?->attachments->isNotEmpty() ?? false) ? 'Świadectwo wzorcowania miernika' : null,
         ]));
@@ -137,6 +138,7 @@ final class ReportRenderer
             'hasRcd' => $hasRcd,
             'hasSupply' => $hasSupply,
             'hasMarkers' => $protocol->markers->isNotEmpty(),
+            'layouts' => $boards->filter(fn (MeasurementBoard $board) => (bool) ($board->layout['report'] ?? false))->map(fn (MeasurementBoard $board) => BoardLayout::for($board))->values(),
             'sections' => $sections,
             'drawings' => $drawings,
             'otherAttachments' => $otherAttachments,
@@ -158,6 +160,21 @@ final class ReportRenderer
 
         foreach ($drawings->values() as $index => $attachment) {
             $this->appendFile($mpdf, $data['protocol'], $attachment, 'ZAŁĄCZNIK '.($index + 1), $attachment->label());
+        }
+
+        // Elewacje rozdzielnic (włączone do raportu w edytorze elewacji).
+        $number = $drawings->count();
+
+        foreach ($data['layouts'] as $layout) {
+            /** @var BoardLayout $layout */
+            $array = $layout->toArray();
+            $mpdf->AddPageByArray(['margin-top' => 40]);
+            $mpdf->WriteHTML(view('pdf.measurements.layout', [
+                'title' => 'ZAŁĄCZNIK '.(++$number),
+                'board' => $layout->board(),
+                'rail' => $array['rail'],
+                'rows' => $layout->resolved(),
+            ])->render(), HTMLParserMode::HTML_BODY);
         }
 
         if ($others->isEmpty()) {

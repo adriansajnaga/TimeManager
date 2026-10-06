@@ -9,6 +9,7 @@ use App\Models\MeasurementMarker;
 use App\Models\MeasurementPoint;
 use App\Models\MeasurementProtocol;
 use App\Models\MeasurementRcd;
+use App\Services\Measurements\Criteria;
 use App\Support\MeasurementInput;
 use Flux\Flux;
 use Illuminate\Support\Collection;
@@ -75,7 +76,7 @@ new class extends Component {
             'phases' => (string) $circuit->phases,
             'protection_type' => $circuit->protection_type?->value ?? '',
             'protection_current' => MeasurementInput::show($circuit->protection_current),
-            'trip_current_override' => MeasurementInput::show($circuit->trip_current_override),
+            'trip_current_override' => $this->tripCurrentField($circuit),
             'cable' => (string) $circuit->cable,
             'rcd_id' => $circuit->rcd_id !== null ? (string) $circuit->rcd_id : '',
             'insulation_voltage' => (string) $circuit->insulation_voltage,
@@ -226,7 +227,8 @@ new class extends Component {
                 'phases' => ['phases' => (int) $value === 3 ? 3 : 1],
                 'protection_type' => ['protection_type' => ProtectionType::tryFrom((string) $value)],
                 'protection_current' => ['protection_current' => MeasurementInput::decimal($value)],
-                'trip_current_override' => ['trip_current_override' => MeasurementInput::decimal($value)],
+                // Wartość równa wyliczonej (albo pusta) = automatycznie; inna = wpisana ręcznie.
+                'trip_current_override' => ['trip_current_override' => $this->manualTripCurrent($circuit, MeasurementInput::decimal($value))],
                 'cable' => ['cable' => trim((string) $value) ?: null],
                 'rcd_id' => ['rcd_id' => $value !== '' && $this->board->rcds()->whereKey((int) $value)->exists() ? (int) $value : null],
                 'insulation_voltage' => ['insulation_voltage' => in_array((int) $value, [250, 500, 1000], true) ? (int) $value : 500],
@@ -234,7 +236,34 @@ new class extends Component {
             });
         }
 
+        // Zmiana zabezpieczenia przelicza Ia w polu (gdy nie było wpisane ręcznie).
+        if (in_array($parts[1], ['protection_type', 'protection_current', 'trip_current_override'], true)) {
+            $this->circuits[$circuit->id]['trip_current_override'] = $this->tripCurrentField($circuit->refresh());
+        }
+
         unset($this->circuitModels);
+    }
+
+    private function tripCurrentField(MeasurementCircuit $circuit): string
+    {
+        $ia = $circuit->tripCurrent($this->protocol);
+
+        return $ia === null ? '' : MeasurementInput::show(round($ia, 1));
+    }
+
+    private function manualTripCurrent(MeasurementCircuit $circuit, ?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $auto = Criteria::tripCurrent(
+            $circuit->protection_type,
+            $circuit->protection_current === null ? null : (float) $circuit->protection_current,
+            $this->protocol->disconnectionTime(),
+        );
+
+        return $auto !== null && abs($auto - (float) $value) < 0.05 ? null : $value;
     }
 
     /** Wszystkie pary izolacji obwodu jednym kliknięciem (np. „>30”). */
@@ -485,8 +514,6 @@ new class extends Component {
 }; ?>
 
 @php
-    use App\Services\Measurements\Criteria;
-
     $fmt = fn (?float $value, int $decimals = 2) => MeasurementInput::format($value, $decimals);
 @endphp
 
@@ -507,6 +534,9 @@ new class extends Component {
         <div class="flex items-center gap-3">
             @unless ($board->isSupply())
                 <flux:switch wire:model.live="withNpe" :label="__('N-PE loop')" />
+            @endunless
+            @unless ($board->isSupply())
+                <flux:button size="sm" icon="view-columns" :href="route('measurements.layout', [$protocol, $board])" wire:navigate>{{ __('Elevation') }}</flux:button>
             @endunless
             <flux:dropdown>
                 <flux:button icon="ellipsis-vertical" size="sm" :aria-label="__('More')" />
@@ -619,8 +649,8 @@ new class extends Component {
                             </div>
                             <div class="grid grid-cols-3 gap-2">
                                 <flux:input wire:model.blur="circuits.{{ $circuit->id }}.protection_current" size="sm" :label="__('In [A]')" inputmode="decimal" list="in-values" />
-                                <flux:input wire:model.blur="circuits.{{ $circuit->id }}.trip_current_override" size="sm" :label="__('Ia manually [A]')" inputmode="decimal"
-                                    :placeholder="$ia !== null ? $fmt($ia, 0) : ''" />
+                                <flux:input wire:model.blur="circuits.{{ $circuit->id }}.trip_current_override" size="sm" :label="__('Ia [A]')" inputmode="decimal"
+                                    :description="$circuit->trip_current_override !== null ? __('entered manually — clear to calculate') : null" />
                                 @unless ($board->isSupply())
                                     <flux:select wire:model.live="circuits.{{ $circuit->id }}.rcd_id" size="sm" :label="__('RCD')">
                                         <flux:select.option value="">—</flux:select.option>
