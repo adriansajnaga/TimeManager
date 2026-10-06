@@ -37,7 +37,7 @@ final class ReportRenderer
         $protocol->refresh();
         $protocol->load([
             'contractor', 'instrument.attachments', 'performers.attachments', 'inspections', 'attachments',
-            'boards.rcds', 'boards.circuits.points.marker', 'boards.circuits.rcd', 'markers', 'earthings', 'continuities', 'cableTests',
+            'boards.rcds', 'boards.circuits.points.marker', 'boards.circuits.rcd', 'markers.board', 'earthings', 'continuities', 'cableTests',
         ]);
 
         $data = $this->data($protocol);

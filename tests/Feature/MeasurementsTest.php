@@ -268,3 +268,35 @@ test('Ia is filled in from the protection and a different value is kept as manua
         ->assertSet("circuits.{$circuit->id}.trip_current_override", '200');
     expect($circuit->fresh()->trip_current_override)->toBeNull();
 });
+
+test('the board is placed on the plan as a named rectangle', function () {
+    $protocol = newProtocol($this->admin);
+    $board = $protocol->boards()->create(['position' => 1, 'name' => 'R1']);
+    $circuit = $board->circuits()->create(['position' => 1, 'number' => '1F1', 'name' => 'Salon', 'protection_type' => ProtectionType::B, 'protection_current' => 16]);
+    $point = $circuit->points()->create(['position' => 1, 'symbol' => 'G1', 'impedance' => '1.2']);
+
+    Livewire::actingAs($this->admin)->test('pages::measurements.show', ['protocol' => $protocol])
+        ->set('uploads', [UploadedFile::fake()->image('rzut.png', 800, 600)]);
+
+    $page = Livewire::actingAs($this->admin)->test('pages::measurements.board', ['protocol' => $protocol, 'board' => $board])
+        ->call('openBoardPlan')
+        ->assertSet('planBoard', true)
+        ->call('placeBoardMarker', 10, 90)
+        ->call('openBoardPlan')
+        ->call('placeBoardMarker', 12, 88);
+
+    $marker = $protocol->markers()->sole();
+    expect($marker->board_id)->toBe($board->id)->and((float) $marker->x)->toBe(12.0);
+
+    // Punkty numerowane od 1 niezależnie od rozdzielnicy; rozdzielnica nie znika przy porządkowaniu.
+    $page->call('openPlan', $point->id)->call('placeMarker', 50, 50);
+    expect($point->fresh()->marker->number)->toBe(1);
+
+    $page->call('openPlan', $point->id)->call('unassignPoint');
+    expect($protocol->markers()->whereNotNull('board_id')->count())->toBe(1);
+
+    $this->actingAs($this->admin)->get(route('measurements.report', $protocol))->assertOk();
+
+    $page->call('openBoardPlan')->call('removeBoardMarker');
+    expect($protocol->markers()->count())->toBe(0);
+});

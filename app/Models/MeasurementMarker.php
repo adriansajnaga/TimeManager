@@ -14,18 +14,20 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $id
  * @property int $protocol_id
  * @property int $attachment_id
+ * @property int|null $board_id Znacznik rozdzielnicy (prostokąt z nazwą) zamiast punktu
  * @property int $number
  * @property string $x Pozycja w % szerokości obrazu
  * @property string $y Pozycja w % wysokości obrazu
  * @property-read Attachment $attachment
+ * @property-read MeasurementBoard|null $board
  */
-#[Fillable(['attachment_id', 'number', 'x', 'y'])]
+#[Fillable(['attachment_id', 'board_id', 'number', 'x', 'y'])]
 class MeasurementMarker extends Model
 {
     /** Kolejny numer znacznika w protokole. */
     public static function nextNumber(MeasurementProtocol $protocol): int
     {
-        return (int) static::query()->where('protocol_id', $protocol->id)->max('number') + 1;
+        return (int) static::query()->where('protocol_id', $protocol->id)->whereNull('board_id')->max('number') + 1;
     }
 
     /**
@@ -44,6 +46,19 @@ class MeasurementMarker extends Model
     public function attachment(): BelongsTo
     {
         return $this->belongsTo(Attachment::class);
+    }
+
+    public function isBoard(): bool
+    {
+        return $this->board_id !== null;
+    }
+
+    /**
+     * @return BelongsTo<MeasurementBoard, $this>
+     */
+    public function board(): BelongsTo
+    {
+        return $this->belongsTo(MeasurementBoard::class, 'board_id');
     }
 
     /**

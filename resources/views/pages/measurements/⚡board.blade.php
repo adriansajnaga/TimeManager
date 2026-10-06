@@ -369,9 +369,57 @@ new class extends Component {
     #[Computed]
     public function planMarkers(): Collection
     {
-        return $this->planId === null ? collect() : $this->protocol->markers()->where('attachment_id', $this->planId)->with('points')->get();
+        return $this->planId === null ? collect() : $this->protocol->markers()->where('attachment_id', $this->planId)->with(['points', 'board'])->get();
     }
 
+    /** Tryb rzutu: stawianie rozdzielnicy (prostokąt z nazwą) zamiast punktu. */
+    public bool $planBoard = false;
+
+    public function openBoardPlan(): void
+    {
+        if ($this->plans->isEmpty()) {
+            Flux::toast(variant: 'warning', text: __('Add a floor plan image to the protocol first (Drawings and attachments).'));
+
+            return;
+        }
+
+        $existing = $this->protocol->markers()->where('board_id', $this->board->id)->first();
+        $this->planPoint = null;
+        $this->planBoard = true;
+        $this->planId = $existing?->attachment_id ?? ($this->planId !== null && $this->plans->contains('id', $this->planId) ? $this->planId : $this->plans->first()?->id);
+        unset($this->planMarkers);
+
+        Flux::modal('plan')->show();
+    }
+
+    /** Stawia (albo przesuwa) rozdzielnicę na wyświetlanym rzucie. */
+    public function placeBoardMarker(float $x, float $y): void
+    {
+        $this->authorize('manage-measurements');
+
+        if ($this->planId === null || ! $this->plans->contains('id', $this->planId)) {
+            return;
+        }
+
+        $this->protocol->markers()->updateOrCreate(
+            ['board_id' => $this->board->id],
+            ['attachment_id' => $this->planId, 'number' => 0, 'x' => max(0, min(100, $x)), 'y' => max(0, min(100, $y))],
+        );
+
+        $this->planBoard = false;
+        unset($this->planMarkers);
+        Flux::modal('plan')->close();
+    }
+
+    public function removeBoardMarker(): void
+    {
+        $this->authorize('manage-measurements');
+        $this->protocol->markers()->where('board_id', $this->board->id)->delete();
+
+        $this->planBoard = false;
+        unset($this->planMarkers);
+        Flux::modal('plan')->close();
+    }
     public function openPlan(int $pointId): void
     {
         $point = $this->boardPoint($pointId);
@@ -387,6 +435,7 @@ new class extends Component {
         }
 
         $this->planPoint = $point->id;
+        $this->planBoard = false;
         $this->planId = $point->marker?->attachment_id ?? ($this->planId !== null && $this->plans->contains('id', $this->planId) ? $this->planId : $this->plans->first()?->id);
         unset($this->planMarkers);
 
@@ -429,7 +478,7 @@ new class extends Component {
     {
         $this->authorize('manage-measurements');
         $point = $this->planPoint !== null ? $this->boardPoint($this->planPoint) : null;
-        $marker = $this->protocol->markers()->whereKey($markerId)->first();
+        $marker = $this->protocol->markers()->whereKey($markerId)->whereNull('board_id')->first();
 
         if ($point === null || $marker === null) {
             return;
@@ -478,12 +527,12 @@ new class extends Component {
     /** Znaczniki bez punktów (po usunięciu punktu lub obwodu) znikają z rzutu. */
     private function pruneMarkers(): void
     {
-        $this->protocol->markers()->whereDoesntHave('points')->delete();
+        $this->protocol->markers()->whereNull('board_id')->whereDoesntHave('points')->delete();
     }
 
     private function dropIfEmpty(?MeasurementMarker $marker): void
     {
-        if ($marker !== null && ! $marker->points()->exists()) {
+        if ($marker !== null && ! $marker->isBoard() && ! $marker->points()->exists()) {
             $marker->delete();
         }
     }
@@ -538,6 +587,7 @@ new class extends Component {
             @unless ($board->isSupply())
                 <flux:button size="sm" icon="view-columns" :href="route('measurements.layout', [$protocol, $board])" wire:navigate>{{ __('Elevation') }}</flux:button>
             @endunless
+            <flux:button size="sm" icon="map-pin" wire:click="openBoardPlan">{{ __('On the plan') }}</flux:button>
             <flux:dropdown>
                 <flux:button icon="ellipsis-vertical" size="sm" :aria-label="__('More')" />
                 <flux:menu>
@@ -757,7 +807,7 @@ new class extends Component {
     @endunless
 
     {{-- Rzut: stuknij miejsce (nowy numer) albo istniejący numer (gniazdo dołącza do grupy) --}}
-    <flux:modal name="plan" class="w-full max-w-5xl" x-on:close="$wire.planPoint = null">
+    <flux:modal name="plan" class="w-full max-w-5xl" x-on:close="$wire.planPoint = null; $wire.planBoard = false">
         @php($planPointModel = $planPoint ? MeasurementPoint::query()->with('marker')->find($planPoint) : null)
         @php($plan = $planId ? $this->plans->firstWhere('id', $planId) : null)
 
@@ -770,12 +820,15 @@ new class extends Component {
                     const x = (event.clientX - rect.left) / rect.width * 100;
                     const y = (event.clientY - rect.top) / rect.height * 100;
                     if (this.moving !== null) { this.$wire.moveMarker(this.moving, x, y); this.moving = null; return; }
+                    if (this.$wire.planBoard) { this.$wire.placeBoardMarker(x, y); return; }
                     this.$wire.placeMarker(x, y);
                 },
             }">
             <div>
                 <flux:heading size="lg">{{ __('Mark on the plan') }}</flux:heading>
-                @if ($planPointModel)
+                @if ($planBoard)
+                    <flux:text><b>{{ $board->name }}</b> — {{ __('tap the place of the board on the plan') }}</flux:text>
+                @elseif ($planPointModel)
                     <flux:text>
                         <b>{{ $planPointModel->symbol }}</b> · {{ $planPointModel->location }}
                         — {{ __('tap the spot for a new number, or an existing number to group sockets next to each other') }}
@@ -805,7 +858,15 @@ new class extends Component {
                     <div class="relative" x-bind:style="'width: ' + zoom + '%'">
                         <img x-ref="image" src="{{ route('attachments.show', ['attachment' => $plan, 'inline' => 1]) }}" alt=""
                             class="block w-full cursor-crosshair select-none" draggable="false" x-on:click="tap($event)">
-                        @foreach ($this->planMarkers as $marker)
+                        @foreach ($this->planMarkers->filter(fn ($marker) => $marker->isBoard()) as $marker)
+                            {{-- Rozdzielnica: czerwony prostokąt z nazwą (stuknięcia przechodzą na rzut) --}}
+                            <span wire:key="board-marker-{{ $marker->id }}" style="left: {{ (float) $marker->x }}%; top: {{ (float) $marker->y }}%;"
+                                @class([
+                                    'pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border-2 border-zinc-900 bg-red-600 px-2 py-0.5 text-xs font-bold text-white shadow',
+                                    'ring-4 ring-blue-300' => $planBoard && $marker->board_id === $board->id,
+                                ])>{{ $marker->board?->name }}</span>
+                        @endforeach
+                        @foreach ($this->planMarkers->reject(fn ($marker) => $marker->isBoard()) as $marker)
                             @php($current = $planPointModel?->marker_id === $marker->id)
                             <button type="button" wire:key="marker-{{ $marker->id }}"
                                 wire:click="assignMarker({{ $marker->id }})"
@@ -828,6 +889,9 @@ new class extends Component {
 
             <div class="flex flex-wrap justify-between gap-2">
                 <div class="flex gap-2">
+                    @if ($planBoard && $this->planMarkers->contains('board_id', $board->id))
+                        <flux:button size="sm" variant="ghost" icon="x-mark" wire:click="removeBoardMarker">{{ __('Remove from the plan') }}</flux:button>
+                    @endif
                     @if ($planPointModel?->marker)
                         <flux:button size="sm" icon="arrows-pointing-out" x-on:click="moving = {{ $planPointModel->marker->id }}">{{ __('Move marker') }}</flux:button>
                         <flux:button size="sm" variant="ghost" icon="x-mark" wire:click="unassignPoint">{{ __('Remove from the plan') }}</flux:button>
