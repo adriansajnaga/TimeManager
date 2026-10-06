@@ -44,8 +44,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('measurements', 'pages::measurements.index')->name('measurements.index');
         Route::livewire('measurements/create', 'pages::measurements.form')->name('measurements.create');
         Route::livewire('measurements/equipment', 'pages::measurements.equipment')->name('measurements.equipment');
-        Route::livewire('measurements/instruments/{instrument}', 'pages::measurements.instrument')->name('measurements.instrument');
-        Route::livewire('measurements/performers/{performer}', 'pages::measurements.performer')->name('measurements.performer');
+        Route::livewire('measurements/instruments/{id}', 'pages::measurements.instrument')->name('measurements.instrument');
+        Route::livewire('measurements/performers/{id}', 'pages::measurements.performer')->name('measurements.performer');
         Route::livewire('measurements/{protocol}', 'pages::measurements.show')->name('measurements.show');
         Route::livewire('measurements/{protocol}/edit', 'pages::measurements.form')->name('measurements.edit');
         Route::livewire('measurements/{protocol}/boards/{board}', 'pages::measurements.board')->name('measurements.board');

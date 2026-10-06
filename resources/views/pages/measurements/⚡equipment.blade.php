@@ -39,7 +39,7 @@ new #[Title('Instruments and people')] class extends Component {
     <flux:card class="space-y-3">
         <div class="flex items-center justify-between">
             <flux:heading size="lg">{{ __('Measuring instruments') }}</flux:heading>
-            <flux:button size="sm" icon="plus" :href="route('measurements.instrument', ['instrument' => 'new'])" wire:navigate>{{ __('Instrument') }}</flux:button>
+            <flux:button size="sm" icon="plus" :href="route('measurements.instrument', ['id' => 'new'])" wire:navigate>{{ __('Instrument') }}</flux:button>
         </div>
         @forelse ($this->instruments as $instrument)
             <a href="{{ route('measurements.instrument', $instrument) }}" wire:navigate wire:key="instrument-{{ $instrument->id }}"
@@ -62,7 +62,7 @@ new #[Title('Instruments and people')] class extends Component {
     <flux:card class="space-y-3">
         <div class="flex items-center justify-between">
             <flux:heading size="lg">{{ __('People performing measurements') }}</flux:heading>
-            <flux:button size="sm" icon="plus" :href="route('measurements.performer', ['performer' => 'new'])" wire:navigate>{{ __('Person') }}</flux:button>
+            <flux:button size="sm" icon="plus" :href="route('measurements.performer', ['id' => 'new'])" wire:navigate>{{ __('Person') }}</flux:button>
         </div>
         @forelse ($this->performers as $performer)
             <a href="{{ route('measurements.performer', $performer) }}" wire:navigate wire:key="performer-{{ $performer->id }}"

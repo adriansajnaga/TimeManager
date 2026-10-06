@@ -19,10 +19,10 @@ new class extends ComponentWithAttachments {
 
     public bool $is_active = true;
 
-    public function mount(string $instrument): void
+    public function mount(string $id): void
     {
-        if ($instrument !== 'new') {
-            $this->instrument = MeasurementInstrument::query()->findOrFail((int) $instrument);
+        if ($id !== 'new') {
+            $this->instrument = MeasurementInstrument::query()->findOrFail((int) $id);
             $this->fill([
                 'name' => $this->instrument->name,
                 'serial_number' => (string) $this->instrument->serial_number,

@@ -15,10 +15,10 @@ new class extends ComponentWithAttachments {
 
     public bool $is_active = true;
 
-    public function mount(string $performer): void
+    public function mount(string $id): void
     {
-        if ($performer !== 'new') {
-            $this->performer = MeasurementPerformer::query()->findOrFail((int) $performer);
+        if ($id !== 'new') {
+            $this->performer = MeasurementPerformer::query()->findOrFail((int) $id);
             $this->fill([
                 'name' => $this->performer->name,
                 'certificates' => (string) $this->performer->certificates,
