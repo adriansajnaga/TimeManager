@@ -823,6 +823,16 @@ new class extends Component {
             x-data="{
                 zoom: 100,
                 moving: null,
+                // Wielkość punktów zapamiętana na urządzeniu; na telefonie domyślnie mniejsze.
+                size: Number(localStorage.getItem('planMarkerSize')) || (window.innerWidth < 640 ? 16 : 26),
+                scale: localStorage.getItem('planMarkerScale') === '1',
+                init() {
+                    this.$watch('size', value => localStorage.setItem('planMarkerSize', value));
+                    this.$watch('scale', value => localStorage.setItem('planMarkerScale', value ? '1' : '0'));
+                },
+                px() { return Math.round(this.size * (this.scale ? this.zoom / 100 : 1)); },
+                dot() { const px = this.px(); return { width: px + 'px', height: px + 'px', fontSize: Math.max(7, px * 0.45) + 'px', borderWidth: (px < 20 ? 1 : 2) + 'px' }; },
+                label() { const px = this.px(); return { fontSize: Math.max(7, px * 0.45) + 'px', padding: (px / 10) + 'px ' + (px / 4) + 'px', borderWidth: (px < 20 ? 1 : 2) + 'px' }; },
                 tap(event) {
                     const rect = this.$refs.image.getBoundingClientRect();
                     const x = (event.clientX - rect.left) / rect.width * 100;
@@ -850,6 +860,11 @@ new class extends Component {
                         <flux:button size="sm" :variant="$item->id === $planId ? 'primary' : 'outline'" wire:click="showPlan({{ $item->id }})">{{ $item->label() }}</flux:button>
                     @endforeach
                 @endif
+                <div class="flex items-center gap-2">
+                    <flux:text class="text-sm">{{ __('Marker size') }}</flux:text>
+                    <input type="range" min="8" max="40" step="2" x-model.number="size" class="w-24 accent-red-600" aria-label="{{ __('Marker size') }}">
+                    <label class="flex items-center gap-1 text-sm"><input type="checkbox" x-model="scale"> {{ __('Scale with the plan') }}</label>
+                </div>
                 <div class="ms-auto flex items-center gap-1">
                     <flux:button size="sm" icon="minus" x-on:click="zoom = Math.max(100, zoom - 50)" :aria-label="__('Zoom out')" />
                     <span class="w-12 text-center text-sm" x-text="zoom + '%'"></span>
@@ -870,9 +885,9 @@ new class extends Component {
                             {{-- Rozdzielnica: czerwony prostokąt z nazwą (stuknięcia przechodzą na rzut) --}}
                             <span wire:key="board-marker-{{ $marker->id }}" style="left: {{ (float) $marker->x }}%; top: {{ (float) $marker->y }}%;"
                                 @class([
-                                    'pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border-2 border-zinc-900 bg-red-600 px-2 py-0.5 text-xs font-bold text-white shadow',
+                                    'pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border-zinc-900 bg-red-600 font-bold leading-tight text-white shadow',
                                     'ring-4 ring-blue-300' => $planBoard && $marker->board_id === $board->id,
-                                ])>{{ $marker->board?->name }}</span>
+                                ]) x-bind:style="label()">{{ $marker->board?->name }}</span>
                         @endforeach
                         @foreach ($this->planMarkers->reject(fn ($marker) => $marker->isBoard()) as $marker)
                             @php($current = $planPointModel?->marker_id === $marker->id)
@@ -881,13 +896,13 @@ new class extends Component {
                                 title="{{ $marker->points->pluck('symbol')->filter()->implode(', ') }}"
                                 style="left: {{ (float) $marker->x }}%; top: {{ (float) $marker->y }}%;"
                                 @class([
-                                    'absolute flex size-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white text-xs font-bold text-white shadow',
+                                    'absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-white font-bold leading-none text-white shadow',
                                     'bg-blue-600 ring-4 ring-blue-300' => $current,
                                     'bg-red-600' => ! $current,
-                                ])>
+                                ]) x-bind:style="dot()">
                                 {{ $marker->number }}
                                 @if ($marker->points->count() > 1)
-                                    <span class="absolute -right-2 -top-2 rounded-full bg-zinc-900 px-1 text-[0.6rem] leading-4">×{{ $marker->points->count() }}</span>
+                                    <span x-show="px() >= 16" class="absolute -right-2 -top-2 rounded-full bg-zinc-900 px-1 text-[0.6rem] leading-4">×{{ $marker->points->count() }}</span>
                                 @endif
                             </button>
                         @endforeach
