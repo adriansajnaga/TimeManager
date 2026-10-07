@@ -8,9 +8,19 @@
     $n = fn (?float $value, int $decimals = 2) => $value === null ? '' : number_format($value, $decimals, ',', ' ');
     $raw = fn ($value) => MeasurementInput::show($value);
     $verdict = fn (?bool $passes) => $passes === null ? '' : ($passes ? 'Pozytywna' : 'Negatywna');
-    $params = 'Un='.$protocol->phase_voltage.'V/'.$protocol->line_voltage.'V, Ul='.$protocol->touch_voltage.'V, ko=1,0, ta='.str_replace('.', ',', (string) (float) $protocol->disconnection_time).'s, Typ sieci = '.$protocol->network;
-    $result = function (bool $negative) {
-        return '<p class="result'.($negative ? ' neg' : '').'">- Wynik przeprowadzonych prób '.($negative ? 'NEGATYWNY' : 'POZYTYWNY').'</p>';
+
+    // Warunki prób — mała linia tuż nad tabelą (część tabeli), nie „wyniki”.
+    $conditions = 'Un='.$protocol->phase_voltage.'V/'.$protocol->line_voltage.'V, UL='.$protocol->touch_voltage.'V, ko=1,0, ta='.str_replace('.', ',', (string) (float) $protocol->disconnection_time).'s, Typ sieci = '.$protocol->network;
+    $condRow = fn (string $text, int $columns) => '<tr><td colspan="'.$columns.'" style="border: none; text-align: left; font-size: 7pt; padding: 0 0 0.6mm 0;">'.e($text).'</td></tr>';
+    $tableTitle = fn (string $text) => '<p style="text-align: center; font-weight: bold; font-size: 8.5pt; margin: 4mm 0 1mm;">'.e($text).'</p>';
+    $result = fn (bool $negative) => '<p style="text-align: center; font-size: 9.5pt; margin-top: 5mm;'.($negative ? ' color: #c00; font-weight: bold;' : '').'">Wynik przeprowadzonych prób '.($negative ? 'NEGATYWNY' : 'POZYTYWNY').'</p>';
+    $legend = function (array $rows) {
+        $html = '<p style="font-weight: bold; font-size: 8pt; margin: 4mm 0 1mm;">Legenda do tabeli:</p><table class="legend">';
+        foreach ($rows as $symbol => $text) {
+            $html .= '<tr><td style="font-weight: bold; width: 28mm;">'.e($symbol).'</td><td>'.e($text).'</td></tr>';
+        }
+
+        return $html.'</table>';
     };
 @endphp
 
@@ -30,118 +40,131 @@
         @endforeach
     </table>
 @endforeach
-{!! $result($protocol->inspections->contains('result', 'non_compliant')) !!}
+<p style="text-align: center; font-size: 9.5pt; margin-top: 5mm;">Wynik przeprowadzonych oględzin i badań {{ $protocol->inspections->contains('result', 'non_compliant') ? 'NEGATYWNY' : 'POZYTYWNY' }}</p>
 
-{{-- RCD --}}
-@if ($hasRcd)
+{{-- RCD: osobny protokół dla każdej rozdzielnicy --}}
+@foreach ($boards->filter(fn ($board) => $board->rcds->isNotEmpty()) as $board)
     <pagebreak />
-    <h2>PROTOKÓŁ</h2>
-    <h3>z przeprowadzonych prób działania wyłączników różnicowoprądowych (RCD)</h3>
+    @include('pdf.measurements.partials.head', [
+        'subtitle' => 'z przeprowadzonych prób działania wyłączników różnicowoprądowych (RCD)',
+        'facts' => [
+            'Data badania' => e(PolishDate::long($protocol->measured_on)),
+            'Lokalizacja' => '<b>'.e($board->name).'</b>',
+            'Napięcie zasilania' => $protocol->phase_voltage.'/'.$protocol->line_voltage.' [V]',
+            'Ilość przebadanych urządzeń' => (string) $board->rcds->count(),
+        ],
+    ])
     @php($rcdNegative = false)
-    @foreach ($boards->filter(fn ($board) => $board->rcds->isNotEmpty()) as $board)
-        <p class="section">Rozdzielnica {{ $board->name }} · Data badania: {{ PolishDate::long($protocol->measured_on) }} · Napięcie zasilania: {{ $protocol->phase_voltage }}/{{ $protocol->line_voltage }} V</p>
-        <table class="grid">
+    <table class="grid">
+        <tr>
+            <th rowspan="2" width="5%">Lp.</th><th rowspan="2" width="27%">Opis urządzenia</th><th rowspan="2" width="6%">Typ</th>
+            <th>In</th><th>I∆n</th><th>UL</th><th>t rcd</th><th>Ia</th><th>Ud</th><th rowspan="2" width="7%">TEST</th><th rowspan="2" width="10%">Ocena</th>
+        </tr>
+        <tr><th>[A]</th><th>[mA]</th><th>[V]</th><th>1×I∆n [ms]</th><th>[mA]</th><th>[V]</th></tr>
+        @foreach ($board->rcds as $index => $rcd)
+            @php($passes = $rcd->passes($protocol->touch_voltage))
+            @php($rcdNegative = $rcdNegative || $passes === false)
             <tr>
-                <th width="5%">Lp.</th><th width="27%">Opis urządzenia</th><th width="6%">Typ</th><th width="6%">In<br>[A]</th><th width="7%">I∆n<br>[mA]</th><th width="6%">UL<br>[V]</th>
-                <th width="10%">t rcd 1×I∆n<br>[ms]</th><th width="7%">Ia<br>[mA]</th><th width="7%">Ud<br>[V]</th><th width="7%">TEST</th><th width="10%">Ocena</th>
+                <td>{{ $index + 1 }}</td>
+                <td class="left">{{ trim($rcd->model.' – '.$rcd->designation, ' –') }}</td>
+                <td>{{ $rcd->type->value }}{{ $rcd->selective ? ' S' : '' }}</td>
+                <td>{{ $raw($rcd->rated_current) }}</td>
+                <td>{{ $rcd->rated_residual }}</td>
+                <td>{{ $protocol->touch_voltage }}</td>
+                <td>{{ $raw($rcd->trip_time) }}</td>
+                <td>{{ $raw($rcd->trip_current) }}</td>
+                <td>{{ $raw($rcd->contact_voltage) }}</td>
+                <td>{{ $rcd->test_button ? 'tak' : 'nie' }}</td>
+                <td class="{{ $passes === false ? 'neg' : '' }}">{{ $verdict($passes) }}</td>
             </tr>
-            @foreach ($board->rcds as $index => $rcd)
-                @php($passes = $rcd->passes($protocol->touch_voltage))
-                @php($rcdNegative = $rcdNegative || $passes === false)
-                <tr>
-                    <td>{{ $index + 1 }}</td>
-                    <td class="left">{{ trim($rcd->model.' – '.$rcd->designation, ' –') }}</td>
-                    <td>{{ $rcd->type->value }}{{ $rcd->selective ? ' S' : '' }}</td>
-                    <td>{{ $raw($rcd->rated_current) }}</td>
-                    <td>{{ $rcd->rated_residual }}</td>
-                    <td>{{ $protocol->touch_voltage }}</td>
-                    <td>{{ $raw($rcd->trip_time) }}</td>
-                    <td>{{ $raw($rcd->trip_current) }}</td>
-                    <td>{{ $raw($rcd->contact_voltage) }}</td>
-                    <td>{{ $rcd->test_button ? 'tak' : 'nie' }}</td>
-                    <td class="{{ $passes === false ? 'neg' : '' }}">{{ $verdict($passes) }}</td>
-                </tr>
-            @endforeach
-        </table>
-    @endforeach
-    <table class="legend" style="margin-top: 3mm;">
-        <tr><td>I∆n</td><td>Różnicowy prąd wyłączający (znamionowy)</td></tr>
-        <tr><td>UL</td><td>Dopuszczalne napięcie dotykowe bezpieczne</td></tr>
-        <tr><td>t rcd</td><td>Zmierzony czas wyłączenia RCD przy 1×I∆n</td></tr>
-        <tr><td>Ia</td><td>Zmierzony prąd powodujący wyłączenie RCD</td></tr>
-        <tr><td>Ud</td><td>Zmierzone napięcie dotyku</td></tr>
-        <tr><td>Ocena</td><td>Pozytywna, gdy czas i prąd zadziałania mieszczą się w granicach dla typu wyłącznika, Ud ≤ UL i naciśnięcie przycisku TEST spowodowało wyzwolenie</td></tr>
+        @endforeach
     </table>
+    {!! $legend([
+        'Lp' => 'Liczba porządkowa',
+        'Typ' => 'Charakterystyka zabezpieczenia różnicowoprądowego',
+        'In' => 'Prąd nominalny zabezpieczenia',
+        'I∆n' => 'Różnicowy prąd wyłączający wyrażony w [mA] (znamionowy)',
+        'UL' => 'Dopuszczalne napięcie dotykowe bezpieczne',
+        't rcd' => 'Zmierzony czas wyłączenia RCD',
+        'Ia' => 'Prąd powodujący wyłączenie RCD wyrażony w [mA] (zmierzony)',
+        'Ud' => 'Napięcie dotyku (zmierzone)',
+        'Ocena' => 'Ocena pomiaru pozytywna, gdy czas i prąd zadziałania mieszczą się w granicach dla typu wyłącznika, Ud ≤ UL oraz gdy naciśnięcie przycisku [TEST] spowodowało wyzwolenie zabezpieczenia RCD',
+    ]) !!}
+    @include('pdf.measurements.partials.inspection-info')
     {!! $result($rcdNegative) !!}
-@endif
+    @unless ($rcdNegative)
+        <p style="text-align: center; font-size: 8.5pt; margin: 1mm 0 0;">Wyłącznik zapewnia szybkie samoczynne wyłączenie zasilania zgodnie z normą PN-HD 60364-6:2016-07</p>
+    @endunless
+@endforeach
 
 {{-- Pętla zwarcia L-PE i N-PE --}}
 @foreach (array_filter(['L-PE' => $hasPoints, 'N-PE' => $hasNpe]) as $loopName => $show)
     @php($npe = $loopName === 'N-PE')
     @php($loopNegative = false)
+    <pagebreak />
+    @include('pdf.measurements.partials.head', [
+        'subtitle' => 'z przeprowadzonych badań ochrony przed porażeniem przez samoczynne wyłączenie – pomiar impedancji pętli zwarcia',
+        'measurement' => 'POMIAR POMIĘDZY PRZEWODAMI <u style="font-size: 12pt;">'.$loopName.'</u>',
+    ])
     @foreach ($boards as $board)
-        @if ($board->circuits->contains(fn ($circuit) => $circuit->points->whereNotNull($npe ? 'impedance_npe' : 'impedance')->isNotEmpty()))
-            <pagebreak />
-            <h2>PROTOKÓŁ – ROZDZIELNIA {{ $board->name }}</h2>
-            <h3>z przeprowadzonych badań ochrony przed porażeniem przez samoczynne wyłączenie – pomiar impedancji pętli zwarcia<br><b>POMIAR POMIĘDZY PRZEWODAMI {{ $loopName }}</b></h3>
-            <p class="params">Wyniki przeprowadzonych prób: {{ $params }}</p>
-            <table class="grid">
-                <tr>
-                    <th width="5%">Lp.</th><th width="{{ $hasMarkers ? 24 : 29 }}%">Badany punkt</th><th width="8%">Symbol</th>@if ($hasMarkers)<th width="5%">Rzut</th>@endif<th width="9%">Zabezp. nr</th><th width="6%">Typ</th><th width="6%">In<br>[A]</th><th width="7%">Ia<br>[A]</th>
-                    <th width="7%">Zs<br>[Ω]</th><th width="7%">Za<br>[Ω]</th><th width="6%">Ik<br>[A]</th><th width="10%">Ocena</th>
-                </tr>
-                @php($lp = 0)
-                @foreach ($board->circuits as $circuit)
-                    @php($points = $circuit->points->whereNotNull($npe ? 'impedance_npe' : 'impedance')->values())
-                    @php($ia = $circuit->tripCurrent($protocol))
-                    @php($za = Criteria::allowedImpedance($protocol->phase_voltage, $ia))
-                    @foreach ($points as $index => $point)
-                        @php($passes = $point->passes($za, $npe))
-                        @php($loopNegative = $loopNegative || $passes === false)
-                        <tr>
-                            <td>{{ ++$lp }}</td>
-                            <td class="left">{{ $point->location ?: $circuit->name }}</td>
-                            <td>{{ $point->symbol }}</td>
-                            @if ($hasMarkers)
-                                <td>{{ $point->marker?->number }}</td>
-                            @endif
-                            @if ($index === 0)
-                                <td rowspan="{{ $points->count() }}">{{ $circuit->number }}</td>
-                                <td rowspan="{{ $points->count() }}">{{ $circuit->protection_type?->label() }}</td>
-                                <td rowspan="{{ $points->count() }}">{{ $raw($circuit->protection_current) }}</td>
-                                <td rowspan="{{ $points->count() }}">{{ $n($ia, 0) }}</td>
-                            @endif
-                            <td>{{ $raw($npe ? $point->impedance_npe : $point->impedance) }}</td>
-                            @if ($index === 0)
-                                <td rowspan="{{ $points->count() }}">{{ $n($za) }}</td>
-                            @endif
-                            <td>{{ $n($point->shortCircuitCurrent($protocol, $npe), 0) }}</td>
-                            <td class="{{ $passes === false ? 'neg' : '' }}">{{ $verdict($passes) }}</td>
-                        </tr>
-                    @endforeach
+        @continue(! $board->circuits->contains(fn ($circuit) => $circuit->points->whereNotNull($npe ? 'impedance_npe' : 'impedance')->isNotEmpty()))
+        @if ($boards->count() > 1)
+            {!! $tableTitle('Rozdzielnica '.$board->name) !!}
+        @endif
+        <table class="grid">
+            {!! $condRow($conditions, 11) !!}
+            <tr>
+                <th width="5%">Lp.</th><th width="26%">Badany punkt</th><th width="8%">Symbol</th><th width="12%">Zabezpieczenie nr</th><th width="6%">Typ</th><th width="6%">In<br>[A]</th><th width="7%">Ia<br>[A]</th>
+                <th width="7%">Zs<br>[Ω]</th><th width="7%">Za<br>[Ω]</th><th width="6%">Ik<br>[A]</th><th width="10%">Ocena</th>
+            </tr>
+            @php($lp = 0)
+            @foreach ($board->circuits as $circuit)
+                @php($points = $circuit->points->whereNotNull($npe ? 'impedance_npe' : 'impedance')->values())
+                @php($ia = $circuit->tripCurrent($protocol))
+                @php($za = Criteria::allowedImpedance($protocol->phase_voltage, $ia))
+                @foreach ($points as $index => $point)
+                    @php($passes = $point->passes($za, $npe))
+                    @php($loopNegative = $loopNegative || $passes === false)
+                    <tr>
+                        <td>{{ ++$lp }}</td>
+                        <td class="left">{{ $point->location ?: $circuit->name }}</td>
+                        <td>{{ $point->symbol }}</td>
+                        @if ($index === 0)
+                            <td rowspan="{{ $points->count() }}">{{ $circuit->number }}</td>
+                            <td rowspan="{{ $points->count() }}">{{ $circuit->protection_type?->label() }}</td>
+                            <td rowspan="{{ $points->count() }}">{{ $raw($circuit->protection_current) }}</td>
+                            <td rowspan="{{ $points->count() }}">{{ $n($ia, 0) }}</td>
+                        @endif
+                        <td>{{ $raw($npe ? $point->impedance_npe : $point->impedance) }}</td>
+                        @if ($index === 0)
+                            <td rowspan="{{ $points->count() }}">{{ $n($za) }}</td>
+                        @endif
+                        <td>{{ $n($point->shortCircuitCurrent($protocol, $npe), 0) }}</td>
+                        <td class="{{ $passes === false ? 'neg' : '' }}">{{ $verdict($passes) }}</td>
+                    </tr>
                 @endforeach
-            </table>
-        @endif
+            @endforeach
+        </table>
     @endforeach
-    <table class="legend" style="margin-top: 3mm;">
-        <tr><td>Symbol</td><td>Symbol badanego punktu (gniazdo G, oświetlenie O, faza L)</td></tr>
-        @if ($hasMarkers)
-            <tr><td>Rzut</td><td>Numer punktu na rzucie w załącznikach (kilka gniazd obok siebie ma wspólny numer)</td></tr>
-        @endif
-        <tr><td>Ia</td><td>Prąd powodujący samoczynne zadziałanie zabezpieczenia w wymaganym czasie</td></tr>
-        <tr><td>Zs</td><td>Zmierzona impedancja pętli zwarcia</td></tr>
-        <tr><td>Za</td><td>Wymagana impedancja pętli zwarcia Za = Uo/Ia</td></tr>
-        <tr><td>Ik</td><td>Prąd zwarcia wyliczony Ik = Uo/Zs</td></tr>
-    </table>
+    {!! $legend(array_filter([
+        'Lp' => 'Liczba porządkowa',
+        'Badany punkt' => 'Rodzaj badanego punktu',
+        'Symbol' => 'Symbol badanego punktu (gniazdo G, oświetlenie O, faza L)',
+        'Zabezpieczenie nr' => 'Numer zabezpieczenia w rozdzielnicy',
+        'Typ' => 'Charakterystyka zabezpieczenia nadmiarowo-prądowego',
+        'In' => 'Prąd nominalny zabezpieczenia nadmiarowo-prądowego',
+        'Ia' => 'Prąd powodujący wyzwolenie zabezpieczenia nadmiarowo-prądowego',
+        'Zs' => 'Zmierzona impedancja pętli zwarcia',
+        'Za' => 'Wartość wymagana impedancji pętli zwarcia Za = Uo/Ia',
+        'Ik' => 'Prąd zwarcia wyliczony Ik = Uo/Zs',
+    ])) !!}
     {!! $result($loopNegative) !!}
 @endforeach
 
 {{-- WLZ: pętla zwarcia odcinka zasilającego --}}
 @if ($hasSupply)
     <pagebreak />
-    <h2>PROTOKÓŁ</h2>
-    <h3>Pomiar impedancji pętli zwarcia – wewnętrzna linia zasilająca (WLZ)</h3>
-    <p class="params">{{ $params }}</p>
+    @include('pdf.measurements.partials.head', ['subtitle' => 'Pomiar impedancji pętli zwarcia'])
     @php($supplyNegative = false)
     @foreach ($supply as $board)
         @foreach ($board->circuits as $circuit)
@@ -149,8 +172,9 @@
             @continue($points->isEmpty())
             @php($ia = $circuit->tripCurrent($protocol))
             @php($za = Criteria::allowedImpedance($protocol->phase_voltage, $ia))
-            <p class="section">{{ $board->name }}</p>
+            {!! $tableTitle($board->name.' – od strony rozdzielni elektrycznej') !!}
             <table class="grid">
+                {!! $condRow($conditions, 9) !!}
                 <tr><th width="6%">Lp.</th><th width="18%">Badany odcinek</th><th width="9%">Typ</th><th width="10%">In [A]</th><th width="10%">Ia [A]</th><th width="11%">Zs [Ω]</th><th width="11%">Za [Ω]</th><th width="11%">Ik [A]</th><th width="14%">Ocena</th></tr>
                 @foreach ($points as $index => $point)
                     @php($passes = $point->passes($za))
@@ -174,21 +198,31 @@
             </table>
         @endforeach
     @endforeach
+    {!! $legend([
+        'Lp' => 'Liczba porządkowa',
+        'Badany odcinek' => 'Rodzaj badanego obwodu lub odcinka',
+        'Typ' => 'Charakterystyka zabezpieczenia nadmiarowo-prądowego',
+        'In' => 'Prąd nominalny zabezpieczenia nadmiarowo-prądowego',
+        'Ia' => 'Prąd powodujący wyzwolenie zabezpieczenia nadmiarowo-prądowego',
+        'Zs' => 'Zmierzona impedancja pętli zwarcia',
+        'Za' => 'Wartość wymagana impedancji pętli zwarcia Za = Uo/Ia',
+        'Ik' => 'Prąd zwarcia wyliczony Ik = Uo/Zs',
+    ]) !!}
     {!! $result($supplyNegative) !!}
 @endif
 
 {{-- Izolacja kabli --}}
 @if ($protocol->cableTests->isNotEmpty())
     <pagebreak />
-    <h2>PROTOKÓŁ</h2>
-    <h3>z przeprowadzonych badań stanu izolacji kabli</h3>
+    @include('pdf.measurements.partials.head', ['subtitle' => 'z przeprowadzonych badań stanu izolacji'])
     @php($cableNegative = false)
     @foreach ($protocol->cableTests as $cable)
         @php($pairs = array_values(array_filter(MeasurementCableTest::PAIRS, fn ($pair) => filled($cable->values[$pair] ?? null))))
         @continue($pairs === [])
-        <p class="section">{{ mb_strtoupper($cable->name) }} · Uiso={{ $cable->test_voltage }}V</p>
+        {!! $tableTitle('BADANIE REZYSTANCJI IZOLACJI – '.mb_strtoupper($cable->name)) !!}
         <table class="grid">
-            <tr><th>Lp.</th><th>Badany odcinek</th><th>Przewód</th><th>Przekrój</th><th>l [m]</th><th>t [°C]</th><th>Rs [MΩ]</th><th>Ra [MΩ]</th><th>Ocena</th></tr>
+            {!! $condRow('Uiso='.$cable->test_voltage.'V', 9) !!}
+            <tr><th>Lp.</th><th>Badany obwód/odcinek</th><th>Przewód</th><th>Przekrój<br>[qmm]</th><th>l<br>[m]</th><th>t<br>[°C]</th><th>Rs<br>[MΩ]</th><th>Ra<br>[MΩ]</th><th>Ocena</th></tr>
             @foreach ($pairs as $index => $pair)
                 @php($passes = $cable->passes($pair))
                 @php($cableNegative = $cableNegative || $passes === false)
@@ -210,19 +244,35 @@
             @endforeach
         </table>
     @endforeach
+    {!! $legend([
+        'Lp' => 'Liczba porządkowa',
+        'Obwód/odcinek' => 'Rodzaj badanego obwodu lub odcinka',
+        'Przewód' => 'Rodzaj badanego przewodu',
+        'Przekrój' => 'Przekrój badanego przewodu oraz ilość żył',
+        'l' => 'Długość badanego odcinka',
+        't' => 'Temperatura podczas pomiaru',
+        'Rs' => 'Zmierzona wartość rezystancji izolacji',
+        'Ra' => 'Wymagana wartość rezystancji izolacji',
+        'Uiso' => 'Napięcie probiercze',
+    ]) !!}
+    @include('pdf.measurements.partials.inspection-info', ['cables' => true])
     {!! $result($cableNegative) !!}
 @endif
 
 {{-- Izolacja obwodów --}}
 @if ($hasInsulation)
+    <pagebreak />
+    @include('pdf.measurements.partials.head', ['subtitle' => 'z przeprowadzonych badań stanu izolacji przewodów'])
     @php($insulationNegative = false)
     @foreach ($boards as $board)
         @php($circuits = $board->circuits->filter(fn ($circuit) => ! empty($circuit->insulation))->values())
         @continue($circuits->isEmpty())
-        <pagebreak />
-        <h2>PROTOKÓŁ – ROZDZIELNIA {{ $board->name }}</h2>
-        <h3>z przeprowadzonych badań stanu izolacji przewodów</h3>
+        @php($voltages = $circuits->pluck('insulation_voltage')->unique()->implode('V / '))
+        @if ($boards->count() > 1)
+            {!! $tableTitle('Rozdzielnica '.$board->name) !!}
+        @endif
         <table class="grid">
+            {!! $condRow('Uiso='.$voltages.'V', 7 + count(MeasurementCircuit::REPORT_PAIRS)) !!}
             <tr>
                 <th rowspan="2">Lp.</th><th rowspan="2">Obwód</th><th rowspan="2">Nr</th><th rowspan="2">Przewód</th><th rowspan="2">Uiso<br>[V]</th><th rowspan="2">Ra<br>[MΩ]</th>
                 <th colspan="{{ count(MeasurementCircuit::REPORT_PAIRS) }}">Rs [MΩ]</th><th rowspan="2">Ocena</th>
@@ -253,60 +303,85 @@
             @endforeach
         </table>
     @endforeach
+    {!! $legend([
+        'Lp' => 'Liczba porządkowa',
+        'Obwód' => 'Nazwa obwodu / pomieszczenia',
+        'Nr' => 'Numer zabezpieczenia w rozdzielnicy',
+        'Przewód' => 'Rodzaj i przekrój przewodu',
+        'Uiso' => 'Napięcie probiercze',
+        'Ra' => 'Wymagana wartość rezystancji izolacji',
+        'Rs' => 'Zmierzona wartość rezystancji izolacji pomiędzy żyłami',
+    ]) !!}
+    @include('pdf.measurements.partials.inspection-info')
     {!! $result($insulationNegative) !!}
 @endif
 
-{{-- Ciągłość i uziemienie --}}
-@if ($protocol->continuities->isNotEmpty() || $protocol->earthings->isNotEmpty())
+{{-- Ciągłość przewodów ochronnych --}}
+@if ($protocol->continuities->isNotEmpty())
     <pagebreak />
-    @if ($protocol->continuities->isNotEmpty())
-        <h2>PROTOKÓŁ</h2>
-        <h3>z przeprowadzonych badań ciągłości przewodów ochronnych i połączeń wyrównawczych</h3>
-        @php($continuityNegative = false)
-        <table class="grid">
-            <tr><th>Lp.</th><th>Badane połączenie</th><th>R [Ω]</th><th>Wartość dopuszczalna [Ω]</th><th>Ocena</th></tr>
-            @foreach ($protocol->continuities as $index => $row)
-                @php($passes = $row->passes())
-                @php($continuityNegative = $continuityNegative || $passes === false)
-                <tr>
-                    <td>{{ $index + 1 }}</td>
-                    <td class="left">{{ $row->name }}</td>
-                    <td>{{ $raw($row->resistance) }}</td>
-                    <td>{{ $raw($row->limit) ?: '–' }}</td>
-                    <td class="{{ $passes === false ? 'neg' : '' }}">{{ $verdict($passes) }}</td>
-                </tr>
-            @endforeach
-        </table>
-        {!! $result($continuityNegative) !!}
-    @endif
+    @include('pdf.measurements.partials.head', ['subtitle' => 'z przeprowadzonych badań ciągłości przewodów ochronnych i połączeń wyrównawczych'])
+    @php($continuityNegative = false)
+    <table class="grid">
+        <tr><th width="6%">Lp.</th><th>Badane połączenie</th><th width="14%">R [Ω]</th><th width="20%">Wartość dopuszczalna [Ω]</th><th width="14%">Ocena</th></tr>
+        @foreach ($protocol->continuities as $index => $row)
+            @php($passes = $row->passes())
+            @php($continuityNegative = $continuityNegative || $passes === false)
+            <tr>
+                <td>{{ $index + 1 }}</td>
+                <td class="left">{{ $row->name }}</td>
+                <td>{{ $raw($row->resistance) }}</td>
+                <td>{{ $raw($row->limit) ?: '–' }}</td>
+                <td class="{{ $passes === false ? 'neg' : '' }}">{{ $verdict($passes) }}</td>
+            </tr>
+        @endforeach
+    </table>
+    {!! $legend([
+        'Lp' => 'Liczba porządkowa',
+        'Badane połączenie' => 'Przewód ochronny lub połączenie wyrównawcze',
+        'R' => 'Zmierzona rezystancja',
+    ]) !!}
+    {!! $result($continuityNegative) !!}
+@endif
 
-    @if ($protocol->earthings->isNotEmpty())
-        <h2 style="margin-top: 8mm;">PROTOKÓŁ</h2>
-        <h3>z przeprowadzonych badań pomiaru rezystancji uziemienia</h3>
-        <p class="params">
-            @if ($protocol->weather) Pogoda: {{ $protocol->weather }}@endif
-            @if ($protocol->temperature !== null), temperatura na zewnątrz: {{ $raw($protocol->temperature) }}°C @endif
-        </p>
-        @php($earthingNegative = false)
-        <table class="grid">
-            <tr><th>Lp.</th><th>Badany punkt</th><th>Rysunek – strona</th><th>RE [Ω]</th><th>Kp</th><th>RE·Kp [Ω]</th><th>Ra [Ω]</th><th>Ocena</th></tr>
-            @foreach ($protocol->earthings as $index => $row)
-                @php($passes = $row->passes())
-                @php($earthingNegative = $earthingNegative || $passes === false)
-                <tr>
-                    <td>{{ $index + 1 }}</td>
-                    <td class="left">{{ $row->name }}</td>
-                    <td>{{ $row->drawing }}</td>
-                    <td>{{ $raw($row->resistance) }}</td>
-                    <td>{{ $raw($row->correction) }}</td>
-                    <td>{{ $n($row->corrected()) }}</td>
-                    <td>{{ $raw($row->limit) }}</td>
-                    <td class="{{ $passes === false ? 'neg' : '' }}">{{ $verdict($passes) }}</td>
-                </tr>
-            @endforeach
-        </table>
-        {!! $result($earthingNegative) !!}
-    @endif
+{{-- Uziemienie --}}
+@if ($protocol->earthings->isNotEmpty())
+    <pagebreak />
+    @include('pdf.measurements.partials.head', ['subtitle' => 'z przeprowadzonych badań pomiaru rezystancji uziemienia'])
+    @php($earthingNegative = false)
+    @php($earthConditions = collect([
+        $protocol->weather ? 'Pogoda: '.$protocol->weather : null,
+        $protocol->temperature !== null ? 'Temperatura na zewnątrz: '.$raw($protocol->temperature).'°C' : null,
+    ])->filter()->implode(', '))
+    <table class="grid">
+        @if ($earthConditions !== '')
+            {!! $condRow($earthConditions, 8) !!}
+        @endif
+        <tr><th width="6%">Lp.</th><th>Badany punkt</th><th width="12%">Rysunek – strona</th><th width="10%">RE [Ω]</th><th width="8%">Kp</th><th width="12%">RE [Kp] [Ω]</th><th width="10%">Ra [Ω]</th><th width="12%">Ocena</th></tr>
+        @foreach ($protocol->earthings as $index => $row)
+            @php($passes = $row->passes())
+            @php($earthingNegative = $earthingNegative || $passes === false)
+            <tr>
+                <td>{{ $index + 1 }}</td>
+                <td class="left">{{ $row->name }}</td>
+                <td>{{ $row->drawing }}</td>
+                <td>{{ $raw($row->resistance) }}</td>
+                <td>{{ $raw($row->correction) }}</td>
+                <td>{{ $n($row->corrected()) }}</td>
+                <td>{{ $raw($row->limit) }}</td>
+                <td class="{{ $passes === false ? 'neg' : '' }}">{{ $verdict($passes) }}</td>
+            </tr>
+        @endforeach
+    </table>
+    {!! $legend([
+        'Lp' => 'Liczba porządkowa',
+        'Badany punkt' => 'Rodzaj badanego uziemienia',
+        'Rysunek' => 'Strona, na której znajduje się rzut obiektu z naniesionym uziomem',
+        'RE' => 'Wartość rezystancji zmierzonej',
+        'Kp' => 'Współczynnik korekcyjny',
+        'RE [Kp]' => 'Wartość rezystancji zmierzonej po uwzględnieniu współczynnika korekcyjnego',
+        'Ra' => 'Wymagana wartość rezystancji uziemienia',
+    ]) !!}
+    {!! $result($earthingNegative) !!}
 @endif
 
 @include('pdf.measurements.criteria')
