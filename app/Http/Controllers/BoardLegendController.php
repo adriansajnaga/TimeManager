@@ -19,17 +19,31 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class BoardLegendController extends Controller
 {
+    /** Szerokość modułu w mm (skala 1:1). */
+    private const MODULE = 18;
+
+    /** Szerokość druku A4 w mm przy marginesach 12 mm: pionowo i poziomo. */
+    private const PORTRAIT_WIDTH = 186;
+
+    private const LANDSCAPE_WIDTH = 273;
+
     public function __invoke(MeasurementProtocol $protocol, MeasurementBoard $board): Response
     {
         abort_unless($board->protocol_id === $protocol->id, 404);
 
         $layout = BoardLayout::for($board);
+        $rail = $layout->toArray()['rail'];
+
+        // Moduł 18 mm (1:1): pionowo, gdy szyna się mieści; inaczej poziomo, a gdy i tak za szeroka — pomniejszona.
+        $landscape = $rail * self::MODULE > self::PORTRAIT_WIDTH;
+        $module = min(self::MODULE, ($landscape ? self::LANDSCAPE_WIDTH : self::PORTRAIT_WIDTH) / max(1, $rail));
         $tempDir = storage_path('app/mpdf');
         File::ensureDirectoryExists($tempDir);
 
         $mpdf = new Mpdf([
             'mode' => 'utf-8',
-            'format' => 'A4-L',
+            'format' => 'A4',
+            'orientation' => $landscape ? 'L' : 'P',
             'tempDir' => $tempDir,
             'default_font' => 'dejavusanscondensed',
             'margin_left' => 12,
@@ -45,7 +59,8 @@ class BoardLegendController extends Controller
             'protocol' => $protocol,
             'board' => $board,
             'company' => CompanySetting::current(),
-            'rail' => $layout->toArray()['rail'],
+            'rail' => $rail,
+            'module' => $module,
             'rows' => $layout->resolved(),
         ])->render(), HTMLParserMode::HTML_BODY);
 
