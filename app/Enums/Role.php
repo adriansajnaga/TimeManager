@@ -9,6 +9,7 @@ enum Role: string
 {
     case Admin = 'admin';
     case Employee = 'employee';
+    case Client = 'client';
 
     /**
      * @return list<Permission>
@@ -16,9 +17,13 @@ enum Role: string
     public function permissions(): array
     {
         return match ($this) {
-            self::Admin => Permission::cases(),
+            // Administrator ma wszystko poza podglądem klienta (ten wymaga przypisanej firmy).
+            self::Admin => array_filter(Permission::cases(), fn (Permission $permission) => $permission !== Permission::ViewClientPortal),
             self::Employee => [
                 Permission::LogOwnTime,
+            ],
+            self::Client => [
+                Permission::ViewClientPortal,
             ],
         };
     }
@@ -33,6 +38,7 @@ enum Role: string
         return match ($this) {
             self::Admin => __('Administrator'),
             self::Employee => __('Employee'),
+            self::Client => __('Client (view only)'),
         };
     }
 }

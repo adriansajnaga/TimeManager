@@ -33,7 +33,11 @@ test('guests are redirected to login', function (string $url) {
 })->with('admin pages');
 
 test('roles map to permissions', function () {
-    expect(Role::Admin->permissions())->toBe(Permission::cases())
+    // Administrator: wszystko poza widokiem klienta; klient: tylko swój widok.
+    expect(Role::Admin->allows(Permission::ManageSettings))->toBeTrue()
+        ->and(Role::Admin->allows(Permission::ViewClientPortal))->toBeFalse()
+        ->and(count(Role::Admin->permissions()))->toBe(count(Permission::cases()) - 1)
+        ->and(Role::Client->permissions())->toBe([Permission::ViewClientPortal])
         ->and(Role::Employee->allows(Permission::LogOwnTime))->toBeTrue()
         ->and(Role::Employee->allows(Permission::ManageInvoices))->toBeFalse()
         ->and(Role::Employee->allows(Permission::ManageSettings))->toBeFalse();

@@ -7,6 +7,8 @@ use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\MailboxController;
 use App\Http\Controllers\MeasurementReportController;
+use App\Http\Controllers\PortalController;
+use App\Http\Middleware\RedirectClientToPortal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -14,7 +16,14 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', fn () => auth()->check() ? redirect()->route('dashboard') : view('welcome'))->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
+    Route::livewire('dashboard', 'pages::dashboard')->middleware(RedirectClientToPortal::class)->name('dashboard');
+
+    // Klient: tylko projekty swojej firmy, zatwierdzone godziny i Montageaufträge (bez kwot).
+    Route::middleware('can:view-client-portal')->group(function () {
+        Route::livewire('portal', 'pages::portal.index')->name('portal.index');
+        Route::livewire('portal/projects/{project}', 'pages::portal.project')->name('portal.project');
+        Route::get('portal/projects/{project}/weeks/{workWeek}/montageauftrag', [PortalController::class, 'montageauftrag'])->name('portal.montageauftrag');
+    });
 
     Route::middleware('can:log-own-time')->group(function () {
         Route::livewire('time', 'pages::time.week')->name('time.week');

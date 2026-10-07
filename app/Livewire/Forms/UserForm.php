@@ -23,6 +23,9 @@ class UserForm extends Form
 
     public string $role = 'employee';
 
+    /** Firma klienta (tylko rola client). */
+    public string $contractor_id = '';
+
     public string $locale = 'pl';
 
     public bool $is_active = true;
@@ -45,6 +48,7 @@ class UserForm extends Form
             'name' => $user->name,
             'email' => $user->email,
             'role' => $user->role->value,
+            'contractor_id' => $user->contractor_id !== null ? (string) $user->contractor_id : '',
             'locale' => $user->locale->value,
             'is_active' => $user->is_active,
             'personnel_no' => (string) $user->personnel_no,
@@ -66,6 +70,7 @@ class UserForm extends Form
             ],
             // Administrator nie może odebrać sobie roli ani zablokować własnego konta.
             'role' => ['required', Rule::enum(Role::class), $editingSelf ? Rule::in([Role::Admin->value]) : 'nullable'],
+            'contractor_id' => ['required_if:role,'.Role::Client->value, 'nullable', 'exists:contractors,id'],
             'locale' => ['required', Rule::enum(Language::class)],
             'is_active' => ['boolean', $editingSelf ? 'accepted' : 'nullable'],
             'personnel_no' => ['nullable', 'string', 'max:30'],
@@ -83,6 +88,7 @@ class UserForm extends Form
     {
         return [
             'role.in' => __('You cannot remove your own administrator role.'),
+            'contractor_id.required_if' => __('Choose the client company this account may see.'),
             'is_active.accepted' => __('You cannot deactivate your own account.'),
         ];
     }
@@ -97,6 +103,7 @@ class UserForm extends Form
             'name' => trim($this->name),
             'email' => $this->email,
             'role' => $this->role,
+            'contractor_id' => $this->role === Role::Client->value && $this->contractor_id !== '' ? (int) $this->contractor_id : null,
             'locale' => $this->locale,
             'is_active' => $this->is_active,
             'personnel_no' => trim($this->personnel_no) === '' ? null : trim($this->personnel_no),

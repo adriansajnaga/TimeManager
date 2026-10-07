@@ -53,11 +53,21 @@ new class extends Component {
                 <flux:input wire:model="form.name" :label="__('Full name (as on documents)')" required />
                 <flux:input wire:model="form.email" :label="__('Email')" type="email" required />
 
-                <flux:select wire:model="form.role" :label="__('Role')">
+                <flux:select wire:model.live="form.role" :label="__('Role')">
                     @foreach (Role::cases() as $case)
                         <flux:select.option :value="$case->value">{{ $case->label() }}</flux:select.option>
                     @endforeach
                 </flux:select>
+
+                @if ($form->role === Role::Client->value)
+                    <flux:select wire:model="form.contractor_id" :label="__('Client company')"
+                        :description="__('The account sees only the projects, hours and weekly reports of this company — no amounts.')">
+                        <flux:select.option value="">—</flux:select.option>
+                        @foreach (\App\Models\Contractor::query()->clients()->orderBy('name')->get(['id', 'name']) as $contractor)
+                            <flux:select.option :value="(string) $contractor->id">{{ $contractor->name }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
+                @endif
 
                 <flux:select wire:model="form.locale" :label="__('Interface language')">
                     @foreach (Language::cases() as $case)

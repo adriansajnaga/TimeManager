@@ -12,6 +12,7 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -25,6 +26,7 @@ use Illuminate\Support\Str;
  * @property CarbonImmutable|null $email_verified_at
  * @property string $password
  * @property Role $role
+ * @property int|null $contractor_id Firma klienta (rola client)
  * @property Language $locale
  * @property bool $is_active
  * @property string|null $personnel_no
@@ -33,7 +35,7 @@ use Illuminate\Support\Str;
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
-#[Fillable(['name', 'email', 'password', 'role', 'locale', 'is_active', 'personnel_no'])]
+#[Fillable(['name', 'email', 'password', 'role', 'contractor_id', 'locale', 'is_active', 'personnel_no'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -59,6 +61,21 @@ class User extends Authenticatable implements MustVerifyEmail
     public function isAdmin(): bool
     {
         return $this->role === Role::Admin;
+    }
+
+    public function isClient(): bool
+    {
+        return $this->role === Role::Client;
+    }
+
+    /**
+     * Firma, której projekty widzi klient.
+     *
+     * @return BelongsTo<Contractor, $this>
+     */
+    public function contractor(): BelongsTo
+    {
+        return $this->belongsTo(Contractor::class);
     }
 
     public function hasPermission(Permission $permission): bool

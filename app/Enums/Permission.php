@@ -19,4 +19,5 @@ enum Permission: string
     case UseMailbox = 'use-mailbox';
     case ManageNotes = 'manage-notes';
     case ManageMeasurements = 'manage-measurements';
+    case ViewClientPortal = 'view-client-portal';
 }

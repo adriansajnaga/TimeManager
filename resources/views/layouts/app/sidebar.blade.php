@@ -11,6 +11,15 @@
             </flux:sidebar.header>
 
             <flux:sidebar.nav>
+                @can('view-client-portal')
+                    <flux:sidebar.group :heading="auth()->user()->contractor?->name" class="grid">
+                        <flux:sidebar.item icon="folder" :href="route('portal.index')" :current="request()->routeIs('portal.*')" wire:navigate>
+                            {{ __('My projects') }}
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+                @endcan
+
+                @unless (auth()->user()->isClient())
                 <flux:sidebar.group :heading="__('Work')" class="grid">
                     <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                         {{ __('Dashboard') }}
@@ -24,6 +33,7 @@
                         </flux:sidebar.item>
                     @endcan
                 </flux:sidebar.group>
+                @endunless
 
                 @can('use-mailbox')
                     <flux:sidebar.group :heading="__('Mail')" class="grid">
