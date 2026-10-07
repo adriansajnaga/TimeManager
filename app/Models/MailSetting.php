@@ -25,6 +25,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $imap_encryption
  * @property string|null $sent_folder
  * @property CarbonImmutable|null $verified_at
+ * @property CarbonImmutable|null $login_failed_at
  */
 #[Fillable(['host', 'port', 'encryption', 'username', 'password', 'from_address', 'from_name', 'bcc', 'imap_host', 'imap_port', 'imap_encryption', 'sent_folder', 'verified_at'])]
 #[Hidden(['password'])]
@@ -46,12 +47,32 @@ class MailSetting extends Model
             'imap_port' => 'integer',
             'password' => 'encrypted',
             'verified_at' => 'datetime',
+            'login_failed_at' => 'datetime',
         ];
     }
 
     public static function current(): self
     {
         return static::query()->first() ?? new self(['port' => 465, 'encryption' => 'ssl', 'imap_port' => 993, 'imap_encryption' => 'ssl']);
+    }
+
+    /**
+     * Serwer odrzucił login lub hasło — aplikacja nie loguje się sama, dopóki ktoś nie zapisze
+     * nowych danych albo nie kliknie „Testuj skrzynkę” (każda próba przedłuża blokadę cPHulk).
+     */
+    public function loginBlocked(): bool
+    {
+        return $this->login_failed_at !== null;
+    }
+
+    public static function blockLogin(): void
+    {
+        static::query()->update(['login_failed_at' => now()]);
+    }
+
+    public static function resumeLogin(): void
+    {
+        static::query()->update(['login_failed_at' => null]);
     }
 
     public function isConfigured(): bool

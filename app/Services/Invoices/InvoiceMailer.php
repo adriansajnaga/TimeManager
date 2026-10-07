@@ -12,6 +12,7 @@ use App\Models\EmailLog;
 use App\Models\Invoice;
 use App\Models\MailSetting;
 use App\Models\User;
+use App\Services\Mailbox\ImapMailbox;
 use App\Services\Mailbox\Mailbox;
 use App\Support\DefaultTemplates;
 use Illuminate\Mail\SentMessage;
@@ -77,6 +78,10 @@ final class InvoiceMailer
             throw new InvoiceException(__('Configure the e-mail server in Administration → E-mail first.'));
         }
 
+        if ($settings->loginBlocked()) {
+            throw new InvoiceException(__('The mail server rejected the login, so the app no longer tries to log in. Check the password in webmail, then save it in Administration → E-mail or use “Test the mailbox”.'));
+        }
+
         if (! $invoice->isSales() || $invoice->isDraft()) {
             throw new InvoiceException(__('Only issued sales invoices can be sent.'));
         }
@@ -104,6 +109,11 @@ final class InvoiceMailer
         } catch (Throwable $exception) {
             report($exception);
             $log->forceFill(['error' => $exception->getMessage()])->save();
+
+            // Ten sam login co skrzynka: po odrzuconym haśle SMTP też przestajemy próbować.
+            if (str_contains($exception->getMessage(), '535') || ImapMailbox::isAuthFailure($exception)) {
+                MailSetting::blockLogin();
+            }
 
             throw new InvoiceException(__('The e-mail was not sent: :message', ['message' => $exception->getMessage()]));
         }

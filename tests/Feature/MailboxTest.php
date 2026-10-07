@@ -1,7 +1,9 @@
 <?php
 
+use App\Models\Invoice;
 use App\Models\MailSetting;
 use App\Models\User;
+use App\Services\Invoices\InvoiceException;
 use App\Services\Invoices\InvoiceMailer;
 use App\Services\Mailbox\ImapMailbox;
 use App\Services\Mailbox\MailAttachment;
@@ -278,23 +280,32 @@ test('sent e-mails are saved to the Sent folder of the mailbox', function () {
         ->and(MailFolder::looksLikeSent('INBOX'))->toBeFalse();
 });
 
-test('after a rejected login the mailbox does not retry until the password is saved or tested', function () {
+test('after a rejected login the app never retries on its own, only after new credentials or a manual test', function () {
     $settings = MailSetting::query()->create([
         'host' => 'mail.ascomm.test', 'from_address' => 'faktury@ascomm.test',
         'username' => 'faktury@ascomm.test', 'password' => 'secret', 'imap_host' => 'imap.invalid',
     ]);
+    $blocked = __('The mail server rejected the login, so the app no longer tries to log in. Check the password in webmail, then save it in Administration → E-mail or use “Test the mailbox”.');
 
-    // Stan po odrzuconym logowaniu (ImapMailbox zapisuje odcisk danych logowania).
-    Cache::put('mailbox.login-paused', hash('sha256', 'imap.invalid|faktury@ascomm.test|secret'), now()->addMinutes(15));
+    // Stan po odrzuconym logowaniu — zapisany w bazie, więc przetrwa wdrożenie (czyszczenie cache) i upływ czasu.
+    MailSetting::blockLogin();
+    Cache::flush();
+    $this->travel(2)->days();
 
-    expect(fn () => ImapMailbox::fromSettings()->ping())
-        ->toThrow(MailboxException::class, __('The mail server rejected the login. To avoid locking the account, the app does not retry for :minutes minutes. Check the password in Administration → E-mail and use “Test the mailbox”.', ['minutes' => ImapMailbox::PAUSE_MINUTES]));
+    expect(fn () => ImapMailbox::fromSettings()->ping())->toThrow(MailboxException::class, $blocked);
 
-    // Nowe hasło = inny odcisk — wstrzymanie go nie dotyczy (tu: zwykły błąd połączenia z nieistniejącym serwerem).
-    $settings->update(['password' => 'new-secret']);
-    ImapMailbox::resumeLogin();
+    // Wysyłka SMTP (ten sam login) też nie próbuje.
+    $admin = User::factory()->admin()->create();
+    expect(fn () => app(InvoiceMailer::class)->send(new Invoice, $admin, ['klient@example.test'], [], 'Rechnung', 'Text'))
+        ->toThrow(InvoiceException::class, $blocked);
 
-    expect(Cache::has('mailbox.login-paused'))->toBeFalse();
+    // Ponowne zapisanie tych samych danych blokady nie zdejmuje.
+    Livewire::actingAs($admin)->test('pages::admin.mail')->call('save')->assertHasNoErrors();
+    expect($settings->fresh()->loginBlocked())->toBeTrue();
+
+    // Nowe hasło — tak.
+    Livewire::actingAs($admin)->test('pages::admin.mail')->set('password', 'new-secret')->call('save')->assertHasNoErrors();
+    expect($settings->fresh()->loginBlocked())->toBeFalse();
 });
 
 test('trash and spam can be emptied at once, other folders cannot', function () {

@@ -81,8 +81,13 @@ new #[Title('E-mail')] class extends Component {
             $settings->password = $this->password;
         }
 
+        // Blokadę logowania zdejmują dopiero nowe dane logowania — samo ponowne zapisanie jej nie znosi.
+        $credentialsChanged = $settings->isDirty(['username', 'password', 'imap_host', 'imap_port', 'imap_encryption', 'host', 'port', 'encryption']);
         $settings->save();
-        ImapMailbox::resumeLogin();
+
+        if ($credentialsChanged) {
+            ImapMailbox::resumeLogin();
+        }
         $this->reset('password');
         $this->fillFrom($settings);
 
@@ -164,6 +169,14 @@ new #[Title('E-mail')] class extends Component {
         <flux:heading size="xl" level="1">{{ __('E-mail') }}</flux:heading>
         <flux:subheading>{{ __('SMTP server for sending invoices. E-mails are never sent automatically — always after a preview.') }}</flux:subheading>
     </div>
+
+    @php($failedAt = MailSetting::current()->login_failed_at)
+    @if ($failedAt)
+        <flux:callout variant="danger" icon="lock-closed">
+            <flux:callout.heading>{{ __('Login stopped since :date', ['date' => $failedAt->format('d.m.Y H:i')]) }}</flux:callout.heading>
+            <flux:callout.text>{{ __('The mail server rejected the login or password. To keep the account from being locked, the app does not log in to the mailbox or send e-mails until you save new credentials or click “Test the mailbox”.') }}</flux:callout.text>
+        </flux:callout>
+    @endif
 
     <flux:card class="space-y-6">
         @if ($verifiedAt)
