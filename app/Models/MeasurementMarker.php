@@ -62,6 +62,16 @@ class MeasurementMarker extends Model
     }
 
     /**
+     * Symbol na rzucie wg pierwszego punktu (kilka gniazd obok siebie to jeden znacznik).
+     *
+     * @return 'socket'|'socket3'|'light'|'point'
+     */
+    public function kind(): string
+    {
+        return $this->points->sortBy('position')->first()?->kind() ?? 'point';
+    }
+
+    /**
      * @return HasMany<MeasurementPoint, $this>
      */
     public function points(): HasMany

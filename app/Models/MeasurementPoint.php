@@ -28,6 +28,24 @@ class MeasurementPoint extends Model
 {
     public const LOOPS = ['L-PE', 'L-N', 'L-L'];
 
+    /**
+     * Rodzaj punktu do symbolu na rzucie — z symbolu nadawanego przy dodawaniu: G… gniazdo, O… oświetlenie,
+     * L1–L3 albo gniazdo obwodu trójfazowego — gniazdo trójfazowe, reszta — zwykły punkt.
+     *
+     * @return 'socket'|'socket3'|'light'|'point'
+     */
+    public function kind(): string
+    {
+        $symbol = mb_strtoupper(trim((string) $this->symbol));
+
+        return match (true) {
+            preg_match('/^L[123]$/', $symbol) === 1 => 'socket3',
+            preg_match('/^G\d*$/', $symbol) === 1 => $this->circuit->phases === 3 ? 'socket3' : 'socket',
+            preg_match('/^O\d*$/', $symbol) === 1 => 'light',
+            default => 'point',
+        };
+    }
+
     public function isLineToLine(): bool
     {
         return $this->loop === 'L-L';

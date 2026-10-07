@@ -1,7 +1,9 @@
 <?php
 
+use App\Enums\Role;
 use App\Models\Project;
 use App\Models\TimeEntry;
+use App\Models\User;
 use App\Models\WorkWeek;
 use App\Services\ClientPortal;
 use App\Support\Hours;
@@ -38,6 +40,15 @@ new #[Title('Working time')] class extends Component {
     public function currentWeek(): void
     {
         $this->week = CarbonImmutable::today()->format('o-\WW');
+    }
+
+    /**
+     * Czyj to czas pracy — wykonawca (pierwszy aktywny administrator), nie firma klienta.
+     */
+    #[Computed]
+    public function contractorName(): ?string
+    {
+        return User::query()->where('role', Role::Admin)->where('is_active', true)->oldest('id')->value('name');
     }
 
     #[Computed]
@@ -135,7 +146,7 @@ new #[Title('Working time')] class extends Component {
 <section class="w-full space-y-6">
     <div>
         <flux:heading size="xl" level="1">{{ __('Working time') }}</flux:heading>
-        <flux:subheading>{{ auth()->user()->contractor?->name }}</flux:subheading>
+        <flux:subheading>{{ $this->contractorName }}</flux:subheading>
     </div>
 
     <div class="flex flex-wrap items-center gap-3">

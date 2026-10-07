@@ -370,7 +370,7 @@ new class extends Component {
     #[Computed]
     public function planMarkers(): Collection
     {
-        return $this->planId === null ? collect() : $this->protocol->markers()->where('attachment_id', $this->planId)->with(['points', 'board'])->get();
+        return $this->planId === null ? collect() : $this->protocol->markers()->where('attachment_id', $this->planId)->with(['points.circuit', 'board'])->get();
     }
 
     /** Tryb rzutu: stawianie rozdzielnicy (prostokąt z nazwą) zamiast punktu. */
@@ -831,7 +831,7 @@ new class extends Component {
                     this.$watch('scale', value => localStorage.setItem('planMarkerScale', value ? '1' : '0'));
                 },
                 px() { return Math.round(this.size * (this.scale ? this.zoom / 100 : 1)); },
-                dot() { const px = this.px(); return { width: px + 'px', height: px + 'px', fontSize: Math.max(7, px * 0.45) + 'px', borderWidth: (px < 20 ? 1 : 2) + 'px' }; },
+                dot() { const px = this.px(); return { width: px + 'px', height: px + 'px', fontSize: Math.max(7, px * 0.45) + 'px' }; },
                 label() { const px = this.px(); return { fontSize: Math.max(7, px * 0.45) + 'px', padding: (px / 10) + 'px ' + (px / 4) + 'px', borderWidth: (px < 20 ? 1 : 2) + 'px' }; },
                 tap(event) {
                     const rect = this.$refs.image.getBoundingClientRect();
@@ -896,14 +896,12 @@ new class extends Component {
                                 title="{{ $marker->points->pluck('symbol')->filter()->implode(', ') }}"
                                 style="left: {{ (float) $marker->x }}%; top: {{ (float) $marker->y }}%;"
                                 @class([
-                                    'absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-white font-bold leading-none text-white shadow',
-                                    'bg-blue-600 ring-4 ring-blue-300' => $current,
-                                    'bg-red-600' => ! $current,
+                                    'absolute -translate-x-1/2 -translate-y-1/2 rounded font-bold leading-none',
+                                    'bg-blue-100/70 ring-4 ring-blue-300' => $current,
                                 ]) x-bind:style="dot()">
-                                {{ $marker->number }}
-                                @if ($marker->points->count() > 1)
-                                    <span x-show="px() >= 16" class="absolute -right-2 -top-2 rounded-full bg-zinc-900 px-1 text-[0.6rem] leading-4">×{{ $marker->points->count() }}</span>
-                                @endif
+                                {{-- Symbol wg rodzaju punktu, numer obok (jak w tabeli protokołu) --}}
+                                <x-plan-symbol :kind="$marker->kind()" :color="$current ? '#2563eb' : '#dc2626'" />
+                                <span @class(['absolute left-[78%] top-[-28%] rounded px-0.5 text-white shadow', 'bg-blue-600' => $current, 'bg-red-600' => ! $current])>{{ $marker->number }}@if ($marker->points->count() > 1)<span x-show="px() >= 16" class="font-normal"> ×{{ $marker->points->count() }}</span>@endif</span>
                             </button>
                         @endforeach
                     </div>

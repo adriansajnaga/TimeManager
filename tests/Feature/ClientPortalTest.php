@@ -43,7 +43,7 @@ test('the client sees all hours of their own projects, without amounts', functio
 
     // Przebieg tygodnia: projekty × dni, z niezatwierdzonymi godzinami.
     $this->get(route('portal.week', ['week' => '2026-W38']))->assertOk()
-        ->assertSee('160245002')->assertSee('14.09')->assertSee(__('In progress'))
+        ->assertSee('160245002')->assertSee('14.09')->assertSee(__('In progress'))->assertSee($this->admin->name)
         ->assertDontSee('999000001');
 
     $this->get(route('portal.project', $this->foreign))->assertNotFound();
