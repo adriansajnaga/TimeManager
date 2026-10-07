@@ -13,8 +13,11 @@
             <flux:sidebar.nav>
                 @can('view-client-portal')
                     <flux:sidebar.group :heading="auth()->user()->contractor?->name" class="grid">
-                        <flux:sidebar.item icon="folder" :href="route('portal.index')" :current="request()->routeIs('portal.*')" wire:navigate>
-                            {{ __('My projects') }}
+                        <flux:sidebar.item icon="folder" :href="route('portal.index')" :current="request()->routeIs('portal.index', 'portal.project')" wire:navigate>
+                            {{ __('Projects') }}
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="clock" :href="route('portal.week')" :current="request()->routeIs('portal.week')" wire:navigate>
+                            {{ __('Working time') }}
                         </flux:sidebar.item>
                     </flux:sidebar.group>
                 @endcan

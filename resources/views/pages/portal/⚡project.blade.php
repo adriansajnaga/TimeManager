@@ -2,7 +2,6 @@
 
 use App\Models\Project;
 use App\Models\TimeEntry;
-use App\Models\WeeklyReport;
 use App\Models\WorkWeek;
 use App\Services\ClientPortal;
 use App\Support\Hours;
@@ -21,7 +20,7 @@ new class extends Component {
     }
 
     /**
-     * Wszystkie wpisy projektu (bez stawek) — zatwierdzone i w trakcie.
+     * Wpisy projektu (bez stawek) — zatwierdzone i w trakcie, najnowsze najpierw.
      *
      * @return Collection<int, TimeEntry>
      */
@@ -30,46 +29,49 @@ new class extends Component {
     {
         return (new ClientPortal(auth()->user()))->entries()
             ->where('project_id', $this->project->id)
-            ->with('user:id,name')
-            ->orderBy('work_date')
+            ->with(['user:id,name', 'workWeek.closures'])
+            ->orderByDesc('work_date')
             ->orderBy('start_time')
             ->get();
     }
 
     /**
-     * Przebieg projektu tydzień po tygodniu (najnowsze najpierw): wpisy dzienne, a na końcu Montageauftrag,
-     * gdy część tygodnia jest zamknięta dla firmy klienta.
+     * Dni pracy: data, osoby, godziny i czy są już zatwierdzone.
      *
-     * @return Collection<int, array{week: WorkWeek, approved: bool, entries: Collection<int, TimeEntry>, hours: string, report: WeeklyReport|null}>
+     * @return Collection<string, array{date: string, people: string, hours: string, approved: bool}>
+     */
+    #[Computed]
+    public function days(): Collection
+    {
+        return $this->entries
+            ->groupBy(fn (TimeEntry $entry) => $entry->work_date->toDateString())
+            ->map(fn (Collection $entries) => [
+                'date' => $entries->first()->work_date->translatedFormat('D d.m.Y'),
+                'people' => $entries->pluck('user.name')->unique()->implode(', '),
+                'hours' => $this->sum($entries),
+                'approved' => $entries->every(fn (TimeEntry $entry) => $this->approved($entry)),
+            ]);
+    }
+
+    /**
+     * Części tygodni z Montageauftrag (zamknięte dla firmy klienta).
+     *
+     * @return Collection<int, WorkWeek>
      */
     #[Computed]
     public function weeks(): Collection
     {
-        $contractorId = $this->project->contractor_id;
-        $weeks = WorkWeek::query()->whereIn('id', $this->entries->pluck('work_week_id')->unique())->with('closures')->get()->keyBy('id');
-        $reports = WeeklyReport::query()
-            ->where('project_id', $this->project->id)
-            ->whereIn('work_week_id', $weeks->keys())
-            ->with(['materials' => fn ($query) => $query->orderBy('position')])
-            ->get()
-            ->keyBy('work_week_id');
-
         return $this->entries
-            ->groupBy('work_week_id')
-            ->map(function (Collection $entries, int $weekId) use ($weeks, $reports, $contractorId) {
-                $week = $weeks[$weekId];
-                $approved = $week->isClosedFor($contractorId);
-
-                return [
-                    'week' => $week,
-                    'approved' => $approved,
-                    'entries' => $entries,
-                    'hours' => $this->sum($entries),
-                    'report' => $approved ? $reports->get($weekId) : null,
-                ];
-            })
-            ->sortByDesc(fn (array $item) => $item['week']->starts_on)
+            ->filter(fn (TimeEntry $entry) => $this->approved($entry))
+            ->pluck('workWeek')
+            ->unique('id')
+            ->sortByDesc('starts_on')
             ->values();
+    }
+
+    public function approved(TimeEntry $entry): bool
+    {
+        return $entry->workWeek->isClosedFor($this->project->contractor_id);
     }
 
     /**
@@ -90,20 +92,19 @@ new class extends Component {
     <div>
         <flux:heading size="xl" level="1">{{ $project->number }} · {{ $project->name }}</flux:heading>
         <flux:subheading>
-            <flux:link :href="route('portal.index')" wire:navigate>{{ __('My projects') }}</flux:link>
+            <flux:link :href="route('portal.index')" wire:navigate>{{ __('Projects') }}</flux:link>
             @if ($project->site_name || $project->site_city)
                 · {{ collect([$project->site_name, $project->site_city])->filter()->implode(', ') }}
             @endif
         </flux:subheading>
     </div>
 
-    @php($approvedHours = $this->sum($this->weeks->where('approved', true)->pluck('entries')->flatten(1)))
-    @php($openHours = $this->sum($this->weeks->where('approved', false)->pluck('entries')->flatten(1)))
+    @php($openHours = $this->sum($this->entries->reject(fn ($entry) => $this->approved($entry))))
 
     <div class="grid gap-4 sm:grid-cols-3">
         <flux:card>
             <flux:text>{{ __('Approved hours') }}</flux:text>
-            <flux:heading size="xl">{{ Hours::format($approvedHours) }} h</flux:heading>
+            <flux:heading size="xl">{{ Hours::format($this->sum($this->entries->filter(fn ($entry) => $this->approved($entry)))) }} h</flux:heading>
         </flux:card>
         <flux:card>
             <flux:text>{{ __('Hours in progress (not yet approved)') }}</flux:text>
@@ -111,78 +112,47 @@ new class extends Component {
         </flux:card>
         <flux:card>
             <flux:text>{{ __('Working days') }}</flux:text>
-            <flux:heading size="xl">{{ $this->entries->pluck('work_date')->map->toDateString()->unique()->count() }}</flux:heading>
+            <flux:heading size="xl">{{ $this->days->count() }}</flux:heading>
         </flux:card>
     </div>
 
-    @forelse ($this->weeks as $item)
-        <flux:card class="space-y-4" wire:key="week-{{ $item['week']->id }}">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-                <flux:heading size="lg">{{ $item['week']->label() }}</flux:heading>
-                <div class="flex items-center gap-2">
-                    @if ($item['approved'])
-                        <flux:badge size="sm" color="green" icon="check-circle">{{ __('Approved') }}</flux:badge>
-                    @else
-                        <flux:badge size="sm" color="amber" icon="clock">{{ __('In progress — not yet approved') }}</flux:badge>
-                    @endif
-                    <flux:badge size="sm">{{ Hours::format($item['hours']) }} h</flux:badge>
-                </div>
-            </div>
+    <flux:table>
+        <flux:table.columns>
+            <flux:table.column>{{ __('Date') }}</flux:table.column>
+            <flux:table.column>{{ __('People') }}</flux:table.column>
+            <flux:table.column>{{ __('Status') }}</flux:table.column>
+            <flux:table.column align="end">{{ __('Hours') }}</flux:table.column>
+        </flux:table.columns>
+        <flux:table.rows>
+            @forelse ($this->days as $key => $day)
+                <flux:table.row :key="$key">
+                    <flux:table.cell class="whitespace-nowrap">{{ $day['date'] }}</flux:table.cell>
+                    <flux:table.cell>{{ $day['people'] }}</flux:table.cell>
+                    <flux:table.cell>
+                        @if ($day['approved'])
+                            <flux:badge size="sm" color="green">{{ __('Approved') }}</flux:badge>
+                        @else
+                            <flux:badge size="sm" color="amber">{{ __('In progress') }}</flux:badge>
+                        @endif
+                    </flux:table.cell>
+                    <flux:table.cell align="end" class="tabular-nums">{{ Hours::format($day['hours']) }}</flux:table.cell>
+                </flux:table.row>
+            @empty
+                <flux:table.row>
+                    <flux:table.cell colspan="4" class="text-center">{{ __('No working hours yet.') }}</flux:table.cell>
+                </flux:table.row>
+            @endforelse
+        </flux:table.rows>
+    </flux:table>
 
-            {{-- Przebieg tygodnia: dzień, osoba, godziny, opis --}}
-            <div class="divide-y divide-zinc-200 rounded-lg border border-zinc-200 text-sm dark:divide-zinc-700 dark:border-zinc-700">
-                @foreach ($item['entries'] as $entry)
-                    <div class="flex flex-wrap items-start gap-x-3 gap-y-1 px-3 py-2" wire:key="entry-{{ $entry->id }}">
-                        <div class="w-44 shrink-0 tabular-nums">
-                            {{ $entry->work_date->translatedFormat('D d.m.Y') }}
-                            <div class="text-xs text-zinc-500">{{ $entry->user->name }}</div>
-                        </div>
-                        <div class="w-32 shrink-0 tabular-nums text-zinc-500">
-                            {{ $entry->startLabel() }}–{{ $entry->endLabel() }}
-                            <div class="font-medium text-zinc-800 dark:text-zinc-100">{{ Hours::format($entry->hours) }} h</div>
-                        </div>
-                        <div class="min-w-48 flex-1 text-zinc-600 dark:text-zinc-300">{{ $entry->description ?: '—' }}</div>
-                    </div>
+    @if ($this->weeks->isNotEmpty())
+        <flux:card class="space-y-3">
+            <flux:heading>{{ __('Weekly reports (Montageauftrag)') }}</flux:heading>
+            <div class="flex flex-wrap gap-2">
+                @foreach ($this->weeks as $week)
+                    <flux:button size="sm" icon="document-arrow-down" target="_blank" :href="route('portal.montageauftrag', [$project, $week])">{{ $week->label() }}</flux:button>
                 @endforeach
             </div>
-
-            {{-- Na końcu tygodnia: Montageauftrag --}}
-            @if ($item['report'])
-                <div class="space-y-3 rounded-lg bg-zinc-50 p-4 dark:bg-zinc-800/50">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                        <flux:heading>{{ __('Weekly report (Montageauftrag)') }}</flux:heading>
-                        <flux:button size="sm" icon="document-arrow-down" target="_blank" :href="route('portal.montageauftrag', [$project, $item['week']])">{{ __('PDF') }}</flux:button>
-                    </div>
-                    @if (filled($item['report']->performed_work))
-                        <div>
-                            <flux:text class="text-xs uppercase">{{ __('Work performed') }}</flux:text>
-                            <div class="whitespace-pre-line text-sm">{{ $item['report']->performed_work }}</div>
-                        </div>
-                    @endif
-                    @if (filled($item['report']->remaining_work))
-                        <div>
-                            <flux:text class="text-xs uppercase">{{ __('Remaining work') }}</flux:text>
-                            <div class="whitespace-pre-line text-sm">{{ $item['report']->remaining_work }}</div>
-                        </div>
-                    @endif
-                    @if ($item['report']->materials->isNotEmpty())
-                        <div>
-                            <flux:text class="text-xs uppercase">{{ __('Material') }}</flux:text>
-                            <ul class="text-sm">
-                                @foreach ($item['report']->materials as $material)
-                                    <li>{{ $material->name }}@if (filled($material->quantity)) — {{ $material->quantity }} {{ $material->unit }}@endif</li>
-                                @endforeach
-                            </ul>
-                        </div>
-                    @endif
-                </div>
-            @elseif (! $item['approved'])
-                <flux:text class="text-sm">{{ __('The weekly report will be available once the week is approved.') }}</flux:text>
-            @endif
         </flux:card>
-    @empty
-        <flux:callout icon="information-circle">
-            <flux:callout.text>{{ __('No working hours yet.') }}</flux:callout.text>
-        </flux:callout>
-    @endforelse
+    @endif
 </section>

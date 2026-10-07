@@ -21,6 +21,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Klient: tylko projekty swojej firmy, zatwierdzone godziny i Montageaufträge (bez kwot).
     Route::middleware('can:view-client-portal')->group(function () {
         Route::livewire('portal', 'pages::portal.index')->name('portal.index');
+        Route::livewire('portal/week', 'pages::portal.week')->name('portal.week');
         Route::livewire('portal/projects/{project}', 'pages::portal.project')->name('portal.project');
         Route::get('portal/projects/{project}/weeks/{workWeek}/montageauftrag', [PortalController::class, 'montageauftrag'])->name('portal.montageauftrag');
     });

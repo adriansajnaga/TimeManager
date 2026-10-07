@@ -11,7 +11,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
-new #[Title('My projects')] class extends Component {
+new #[Title('Projects')] class extends Component {
     use WithPagination;
 
     #[Url(except: '')]
@@ -52,7 +52,7 @@ new #[Title('My projects')] class extends Component {
 
 <section class="w-full space-y-6">
     <div>
-        <flux:heading size="xl" level="1">{{ __('My projects') }}</flux:heading>
+        <flux:heading size="xl" level="1">{{ __('Projects') }}</flux:heading>
         <flux:subheading>{{ auth()->user()->contractor?->name }} · {{ __('Working hours and weekly reports.') }}</flux:subheading>
     </div>
 

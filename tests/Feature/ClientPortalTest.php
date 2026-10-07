@@ -29,7 +29,7 @@ beforeEach(function () {
     $this->client = User::factory()->create(['role' => Role::Client, 'contractor_id' => $this->gaertner->id]);
 });
 
-test('the client sees the hours of their own projects week by week, without amounts', function () {
+test('the client sees all hours of their own projects, without amounts', function () {
     $this->actingAs($this->client)->get(route('dashboard'))->assertRedirect(route('portal.index'));
 
     $this->get(route('portal.index'))->assertOk()
@@ -38,9 +38,13 @@ test('the client sees the hours of their own projects week by week, without amou
 
     $this->get(route('portal.project', $this->project))->assertOk()
         ->assertSee('Jan Monter')
-        ->assertSee('Kabel verlegt.')
-        ->assertSee('14.09.2026')->assertSee('Trasy kablowe')->assertSee(__('In progress — not yet approved'))
+        ->assertSee('14.09.2026')->assertSee(__('In progress'))
         ->assertDontSee('Entwurf, noch offen.');
+
+    // Przebieg tygodnia: projekty × dni, z niezatwierdzonymi godzinami.
+    $this->get(route('portal.week', ['week' => '2026-W38']))->assertOk()
+        ->assertSee('160245002')->assertSee('14.09')->assertSee(__('In progress'))
+        ->assertDontSee('999000001');
 
     $this->get(route('portal.project', $this->foreign))->assertNotFound();
 
