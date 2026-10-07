@@ -31,6 +31,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $phase_voltage
  * @property int $line_voltage
  * @property int $touch_voltage
+ * @property float $marker_size Wielkość symboli na rzucie w % szerokości rysunku
  * @property string $disconnection_time
  * @property string|null $weather
  * @property string|null $temperature
@@ -126,6 +127,7 @@ class MeasurementProtocol extends Model implements Attachable
             'phase_voltage' => 'integer',
             'line_voltage' => 'integer',
             'touch_voltage' => 'integer',
+            'marker_size' => 'float',
             'disconnection_time' => 'decimal:1',
             'temperature' => 'decimal:1',
         ];

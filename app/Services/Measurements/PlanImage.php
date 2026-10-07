@@ -20,7 +20,7 @@ final class PlanImage
      *
      * @param  Collection<int, MeasurementMarker>  $markers
      */
-    public function annotate(Attachment $plan, Collection $markers): ?string
+    public function annotate(Attachment $plan, Collection $markers, float $markerSize = 2.5): ?string
     {
         $disk = Storage::disk('local');
 
@@ -49,12 +49,13 @@ final class PlanImage
         }
 
         imagealphablending($image, true);
-        $radius = (int) max(12, round(min($width, $height) / 55));
-        $red = (int) imagecolorallocate($image, 200, 30, 30);
+        // Rozmiary jak na ekranie (strona rozdzielnicy): bok symbolu = $markerSize % szerokości rysunku,
+        // napisy 0,42 (punkt) i 0,45 (rozdzielnica) boku — wydruk wygląda tak samo jak podgląd.
+        $size = $width * $markerSize / 100;
+        $red = (int) imagecolorallocate($image, 220, 38, 38);
         $white = (int) imagecolorallocate($image, 255, 255, 255);
+        $black = (int) imagecolorallocate($image, 24, 24, 27);
         $font = base_path(self::FONT);
-
-        $black = (int) imagecolorallocate($image, 20, 20, 20);
 
         foreach ($markers as $marker) {
             $x = (int) round((float) $marker->x / 100 * $width);
@@ -62,17 +63,16 @@ final class PlanImage
 
             // Rozdzielnica: czerwony prostokąt z nazwą (R1, UV1…).
             if ($marker->isBoard()) {
-                $this->board($image, $x, $y, (string) $marker->board?->name, $radius, $font, $red, $white, $black);
+                $this->board($image, $x, $y, (string) $marker->board?->name, $size * 0.45, $font, $red, $white, $black);
 
                 continue;
             }
 
-            // Symbol większy od dawnego kółka — kreski gniazda trójfazowego muszą być czytelne.
-            $symbol = (int) round($radius * 1.6);
             $kind = $marker->kind();
             $color = $this->color($image, MeasurementMarker::COLORS[$kind]);
-            $this->symbol($image, $kind, $x, $y, $symbol, $color, $white, $font);
-            $this->number($image, (string) $marker->number, $x + (int) round($symbol * 0.75), $y - (int) round($symbol * 0.45), $radius, $font, $color, $white);
+            $count = $marker->points->count();
+            $this->symbol($image, $kind, $x, $y, (int) round($size / 2), $color, $white, $font, $marker->rotation);
+            $this->number($image, $marker->number.($count > 1 ? ' ×'.$count : ''), $x, (int) round($y + $size / 2 + $size * 0.042), $size * 0.42, $font, $color, $white);
         }
 
         $directory = storage_path('app/mpdf');
@@ -89,10 +89,16 @@ final class PlanImage
      *
      * @param  'socket'|'socket3'|'light'|'point'  $kind
      */
-    private function symbol(\GdImage $image, string $kind, int $x, int $y, int $radius, int $color, int $white, string $font): void
+    private function symbol(\GdImage $image, string $kind, int $x, int $y, int $radius, int $color, int $white, string $font, int $rotation = 0): void
     {
         $unit = 2 * $radius / 24;
-        $at = fn (float $gx, float $gy): array => [$x - $radius + $gx * $unit, $y - $radius + $gy * $unit];
+        // Obrót wokół środka siatki (12, 12) zgodnie z ruchem wskazówek, jak transform: rotate() w przeglądarce.
+        $cos = cos(deg2rad($rotation));
+        $sin = sin(deg2rad($rotation));
+        $at = fn (float $gx, float $gy): array => [
+            $x + (($gx - 12) * $cos - ($gy - 12) * $sin) * $unit,
+            $y + (($gx - 12) * $sin + ($gy - 12) * $cos) * $unit,
+        ];
 
         // Linia łamana grubości $width: odcinki + kółka w węzłach (bez szczerb na łukach).
         $stroke = function (array $points, int $paint, float $width) use ($image, $at): void {
@@ -140,8 +146,11 @@ final class PlanImage
         }
 
         if ($kind === 'socket3') {
-            [$tx, $ty] = $at(23, 25.5);
-            imagettftext($image, 8 * $unit * 0.75, 0, (int) round($tx), (int) round($ty), $color, $font, '3');
+            // „3” w obróconym miejscu, zawsze pionowo — wyśrodkowana jak text-anchor="middle".
+            [$tx, $ty] = $at(25, 25.5);
+            $box = imagettfbbox(8 * $unit * 0.75, 0, $font, '3');
+            $half = $box !== false ? ($box[2] - $box[0]) / 2 : 0;
+            imagettftext($image, 8 * $unit * 0.75, 0, (int) round($tx - $half), (int) round($ty), $color, $font, '3');
         }
     }
 
@@ -156,40 +165,49 @@ final class PlanImage
     }
 
     /**
-     * Numer znacznika w czerwonej plakietce przy symbolu (lewy dolny róg plakietki w punkcie $left, $bottom).
+     * Numer znacznika w plakietce koloru symbolu, wyśrodkowany pod nim (górna krawędź w $top).
      */
-    private function number(\GdImage $image, string $label, int $left, int $bottom, int $radius, string $font, int $color, int $white): void
+    private function number(\GdImage $image, string $label, int $x, int $top, float $fontPx, string $font, int $color, int $white): void
     {
-        $size = $radius * 0.8;
-        $box = imagettfbbox($size, 0, $font, $label);
+        $points = $fontPx * 0.75; // GD liczy punkty przy 96 dpi
+        $box = imagettfbbox($points, 0, $font, $label);
 
         if ($box === false) {
             return;
         }
 
         $textWidth = $box[2] - $box[0];
-        $textHeight = $box[1] - $box[7];
-        $pad = (int) max(2, round($radius * 0.18));
-        $top = $bottom - $textHeight - 2 * $pad;
+        $height = (int) round($fontPx * 1.25);
+        $padX = (int) round($fontPx * 0.35);
+        $left = (int) round($x - $textWidth / 2 - $padX);
+        $right = (int) round($x + $textWidth / 2 + $padX);
+        $radius = intdiv($height, 2);
 
-        imagefilledrectangle($image, $left, $top, $left + $textWidth + 2 * $pad, $bottom, $color);
-        imagettftext($image, $size, 0, $left + $pad - $box[0], $bottom - $pad, $white, $font, $label);
+        // Zaokrąglone końce jak „rounded-full” w przeglądarce.
+        imagefilledrectangle($image, $left + $radius, $top, $right - $radius, $top + $height, $color);
+        imagefilledellipse($image, $left + $radius, $top + $radius, $height, $height, $color);
+        imagefilledellipse($image, $right - $radius, $top + $radius, $height, $height, $color);
+        imagettftext($image, $points, 0, (int) round($x - $textWidth / 2 - $box[0]), (int) round($top + $height / 2 + ($box[1] - $box[7]) / 2), $white, $font, $label);
     }
 
-    private function board(\GdImage $image, int $x, int $y, string $name, int $radius, string $font, int $red, int $white, int $black): void
+    /**
+     * Rozdzielnica: czerwony prostokąt z czarną ramką i nazwą (jak na ekranie: odstęp 0,15/0,5 em, ramka 0,12 em).
+     */
+    private function board(\GdImage $image, int $x, int $y, string $name, float $fontPx, string $font, int $red, int $white, int $black): void
     {
-        $size = $radius * 1.0;
-        $box = imagettfbbox($size, 0, $font, $name);
-        $textWidth = $box !== false ? $box[2] - $box[0] : (int) ($size * strlen($name));
-        $textHeight = $box !== false ? $box[1] - $box[7] : (int) $size;
-        $halfWidth = (int) ($textWidth / 2 + $radius * 0.8);
-        $halfHeight = (int) ($textHeight / 2 + $radius * 0.5);
+        $points = $fontPx * 0.75;
+        $box = imagettfbbox($points, 0, $font, $name);
+        $textWidth = $box !== false ? $box[2] - $box[0] : (int) ($fontPx * 0.6 * mb_strlen($name));
+        $textHeight = $box !== false ? $box[1] - $box[7] : (int) $fontPx;
+        $halfWidth = (int) round($textWidth / 2 + $fontPx * 0.5);
+        $halfHeight = (int) round($fontPx * 1.25 / 2 + $fontPx * 0.15);
+        $border = (int) max(1, round($fontPx * 0.12));
 
-        imagefilledrectangle($image, $x - $halfWidth - 3, $y - $halfHeight - 3, $x + $halfWidth + 3, $y + $halfHeight + 3, $black);
+        imagefilledrectangle($image, $x - $halfWidth - $border, $y - $halfHeight - $border, $x + $halfWidth + $border, $y + $halfHeight + $border, $black);
         imagefilledrectangle($image, $x - $halfWidth, $y - $halfHeight, $x + $halfWidth, $y + $halfHeight, $red);
 
         if ($box !== false) {
-            imagettftext($image, $size, 0, (int) ($x - $textWidth / 2 - $box[0]), (int) ($y + $textHeight / 2), $white, $font, $name);
+            imagettftext($image, $points, 0, (int) round($x - $textWidth / 2 - $box[0]), (int) round($y + $textHeight / 2), $white, $font, $name);
         }
     }
 }

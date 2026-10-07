@@ -2,25 +2,29 @@
     use App\Support\PolishDate;
 @endphp
 
-<table width="100%">
-    <tr>
-        @if ($logo)
-            <td style="width: 45%; vertical-align: middle;"><img src="{{ $logo }}" style="max-height: 22mm; max-width: 75mm;" alt=""></td>
-        @endif
-        <td class="company" @if ($logo) style="text-align: right; vertical-align: middle;" @endif>
-            <div class="name">{{ $company->name }}</div>
-            {{ trim($company->street.', '.$company->zip.' '.$company->city, ', ') }}<br>
-            @if ($company->email) mail: {{ $company->email }}<br> @endif
-            @if ($company->website) web: {{ $company->website }}<br> @endif
-            @if ($company->phone) tel.: {{ $company->phone }} @endif
-        </td>
-    </tr>
+{{-- Jak w dotychczasowym wzorze: dane firmy po lewej, logo po prawej, linia pod nagłówkiem.
+     Bez tabeli — mPDF pomniejszał tabelę z logo (liczy szerokość z oryginalnego obrazu). --}}
+<div style="border-bottom: 0.3mm solid #000; padding-bottom: 1.5mm;">
+    @if ($logo)
+        <div style="float: right; width: 45%; text-align: right;"><img src="{{ $logo }}" style="height: 14mm;" alt=""></div>
+    @endif
+    <div style="font-size: 18pt; font-weight: bold;">{{ $company->name }}</div>
+    <div style="font-size: 12pt;">
+        {{ trim($company->street.', '.$company->zip.' '.$company->city, ', ') }}<br>
+        @if ($company->email) mail: {{ $company->email }}<br> @endif
+        @if ($company->website) web: {{ $company->website }}<br> @endif
+        @if ($company->phone) tel.: {{ $company->phone }} @endif
+    </div>
+    <div style="clear: both;"></div>
+</div>
+
+{{-- Tytuł między liniami, numer po prawej — jak w dotychczasowym wzorze. --}}
+<table width="100%" style="border-collapse: collapse; margin-top: 18mm;">
+    <tr><td style="border-top: 0.3mm solid #000; padding-top: 2mm; text-align: center; font-size: 24pt; font-weight: bold;">Protokół z pomiarów elektrycznych</td></tr>
+    <tr><td style="border-bottom: 0.3mm solid #000; padding-bottom: 1mm; text-align: right; font-size: 10.5pt;">Numer: <b>{{ $protocol->number }}</b></td></tr>
 </table>
 
-<h1>Protokół z pomiarów elektrycznych</h1>
-<p style="text-align: right; font-size: 11pt;">Numer: <b>{{ $protocol->number }}</b></p>
-
-<table class="meta" width="100%" style="margin-top: 6mm;">
+<table class="meta title-meta" width="100%" style="margin-top: 8mm;">
     <tr><td class="label">Wykonawca:</td><td class="value">{{ $company->name }}</td></tr>
     <tr><td class="label">Miejsce pomiaru:</td><td class="value">{{ $protocol->place }}</td></tr>
     @if ($protocol->investor)

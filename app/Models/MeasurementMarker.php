@@ -18,10 +18,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $number
  * @property string $x Pozycja w % szerokości obrazu
  * @property string $y Pozycja w % wysokości obrazu
+ * @property int $rotation Obrót symbolu w stopniach (0, 90, 180, 270)
  * @property-read Attachment $attachment
  * @property-read MeasurementBoard|null $board
  */
-#[Fillable(['attachment_id', 'board_id', 'number', 'x', 'y'])]
+#[Fillable(['attachment_id', 'board_id', 'number', 'x', 'y', 'rotation'])]
 class MeasurementMarker extends Model
 {
     /** Kolejny numer znacznika w protokole. */
@@ -37,7 +38,7 @@ class MeasurementMarker extends Model
      */
     protected function casts(): array
     {
-        return ['number' => 'integer'];
+        return ['number' => 'integer', 'rotation' => 'integer'];
     }
 
     /**

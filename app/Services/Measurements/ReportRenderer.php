@@ -215,7 +215,7 @@ final class ReportRenderer
             // Rzut ze znacznikami punktów pomiarowych.
             $markers = $protocol->markers->where('attachment_id', $attachment->id);
 
-            if ($markers->isNotEmpty() && ($annotated = $this->planImage->annotate($attachment, $markers)) !== null) {
+            if ($markers->isNotEmpty() && ($annotated = $this->planImage->annotate($attachment, $markers, (float) $protocol->marker_size)) !== null) {
                 $this->temporary[] = $path = $annotated;
             }
 

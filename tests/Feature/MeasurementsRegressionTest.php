@@ -86,3 +86,25 @@ test('every circuit gets a protective conductor continuity row filled from the b
     $protocol->refresh()->syncContinuities();
     expect($protocol->continuities()->count())->toBe(3);
 });
+
+test('plan symbols keep the protocol size and can be rotated, also in the report', function () {
+    $protocol = MeasurementProtocol::query()->create([...MeasurementProtocol::nextNumber(now()), 'place' => 'Toruń', 'measured_on' => now()->toDateString()]);
+    $protocol->refresh();
+    $board = $protocol->boards()->create(['position' => 1, 'name' => 'R1']);
+    $circuit = $board->circuits()->create(['position' => 1, 'number' => '1F1', 'name' => 'Salon', 'protection_type' => ProtectionType::B, 'protection_current' => 16]);
+    $socket = $circuit->points()->create(['position' => 1, 'symbol' => 'G1']);
+
+    Livewire::actingAs($this->admin)->test('pages::measurements.show', ['protocol' => $protocol])
+        ->set('uploads', [UploadedFile::fake()->image('rzut.png', 800, 600)]);
+
+    Livewire::actingAs($this->admin)->test('pages::measurements.board', ['protocol' => $protocol, 'board' => $board])
+        ->set('markerSize', 9)
+        ->call('openPlan', $socket->id)->call('placeMarker', 40, 40)
+        ->call('openPlan', $socket->id)->call('rotateMarker')->call('rotateMarker');
+
+    expect((float) $protocol->refresh()->marker_size)->toBe(6.0)
+        ->and($socket->refresh()->marker->rotation)->toBe(180)
+        ->and($socket->marker->kind())->toBe('socket');
+
+    $this->actingAs($this->admin)->get(route('measurements.report', $protocol))->assertOk();
+});

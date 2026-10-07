@@ -48,6 +48,7 @@ new class extends Component {
         $this->protocol = $protocol;
         $this->board = $board;
         $this->boardName = $board->name;
+        $this->markerSize = (float) $protocol->marker_size;
         $this->loadState();
         $this->withNpe = MeasurementPoint::query()->whereIn('circuit_id', array_keys($this->circuits))->whereNotNull('impedance_npe')->exists();
         $this->open = $board->isSupply() ? (array_key_first($this->circuits) ?: null) : null;
@@ -382,6 +383,28 @@ new class extends Component {
 
     /** Tryb rzutu: stawianie rozdzielnicy (prostokąt z nazwą) zamiast punktu. */
     public bool $planBoard = false;
+
+    /** Wielkość symboli na rzucie w % szerokości rysunku (zapisana w protokole — ta sama w wydruku). */
+    public float $markerSize = 2.5;
+
+    /** Obraca symbol zaznaczonego punktu o 90° (gniazdo do ściany). */
+    public function rotateMarker(): void
+    {
+        $this->authorize('manage-measurements');
+        $marker = $this->planPoint !== null ? $this->boardPoint($this->planPoint)?->marker : null;
+
+        if ($marker !== null) {
+            $marker->update(['rotation' => ($marker->rotation + 90) % 360]);
+            unset($this->planMarkers);
+        }
+    }
+
+    public function updatedMarkerSize(): void
+    {
+        $this->authorize('manage-measurements');
+        $this->markerSize = round(max(0.8, min(6, $this->markerSize)), 1);
+        $this->protocol->forceFill(['marker_size' => $this->markerSize])->save();
+    }
 
     public function openBoardPlan(): void
     {
@@ -840,16 +863,6 @@ new class extends Component {
             x-data="{
                 zoom: 100,
                 moving: null,
-                // Wielkość punktów zapamiętana na urządzeniu; na telefonie domyślnie mniejsze.
-                size: Number(localStorage.getItem('planMarkerSize')) || (window.innerWidth < 640 ? 16 : 26),
-                scale: localStorage.getItem('planMarkerScale') === '1',
-                init() {
-                    this.$watch('size', value => localStorage.setItem('planMarkerSize', value));
-                    this.$watch('scale', value => localStorage.setItem('planMarkerScale', value ? '1' : '0'));
-                },
-                px() { return Math.round(this.size * (this.scale ? this.zoom / 100 : 1)); },
-                dot() { const px = this.px(); return { width: px + 'px', height: px + 'px', fontSize: Math.max(7, px * 0.45) + 'px' }; },
-                label() { const px = this.px(); return { fontSize: Math.max(7, px * 0.45) + 'px', padding: (px / 10) + 'px ' + (px / 4) + 'px', borderWidth: (px < 20 ? 1 : 2) + 'px' }; },
                 tap(event) {
                     const rect = this.$refs.image.getBoundingClientRect();
                     const x = (event.clientX - rect.left) / rect.width * 100;
@@ -879,8 +892,8 @@ new class extends Component {
                 @endif
                 <div class="flex items-center gap-2">
                     <flux:text class="text-sm">{{ __('Marker size') }}</flux:text>
-                    <input type="range" min="8" max="40" step="2" x-model.number="size" class="w-24 accent-red-600" aria-label="{{ __('Marker size') }}">
-                    <label class="flex items-center gap-1 text-sm"><input type="checkbox" x-model="scale"> {{ __('Scale with the plan') }}</label>
+                    {{-- Wielkość względem rysunku, zapisana w protokole — wydruk wygląda tak samo jak ekran --}}
+                    <input type="range" min="0.8" max="6" step="0.1" wire:model.live.debounce.300ms="markerSize" class="w-28 accent-zinc-700" aria-label="{{ __('Marker size') }}">
                 </div>
                 <div class="ms-auto flex items-center gap-1">
                     <flux:button size="sm" icon="minus" x-on:click="zoom = Math.max(100, zoom - 50)" :aria-label="__('Zoom out')" />
@@ -895,31 +908,33 @@ new class extends Component {
 
             @if ($plan)
                 <div class="max-h-[65vh] overflow-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
-                    <div class="relative" x-bind:style="'width: ' + zoom + '%'">
+                    {{-- Kontener zapytań: rozmiary symboli w cqw = % szerokości rysunku, jak w PDF (PlanImage) --}}
+                    <div class="relative [container-type:inline-size]" x-bind:style="'width: ' + zoom + '%'">
                         <img x-ref="image" src="{{ route('attachments.show', ['attachment' => $plan, 'inline' => 1]) }}" alt=""
                             class="block w-full cursor-crosshair select-none" draggable="false" x-on:click="tap($event)">
                         @foreach ($this->planMarkers->filter(fn ($marker) => $marker->isBoard()) as $marker)
                             {{-- Rozdzielnica: czerwony prostokąt z nazwą (stuknięcia przechodzą na rzut) --}}
-                            <span wire:key="board-marker-{{ $marker->id }}" style="left: {{ (float) $marker->x }}%; top: {{ (float) $marker->y }}%;"
+                            <span wire:key="board-marker-{{ $marker->id }}"
+                                style="left: {{ (float) $marker->x }}%; top: {{ (float) $marker->y }}%; font-size: {{ $markerSize * 0.45 }}cqw; padding: 0.15em 0.5em; border-width: 0.12em;"
                                 @class([
-                                    'pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border-zinc-900 bg-red-600 font-bold leading-tight text-white shadow',
+                                    'pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border-solid border-zinc-900 bg-red-600 font-bold leading-tight text-white',
                                     'ring-4 ring-blue-300' => $planBoard && $marker->board_id === $board->id,
-                                ]) x-bind:style="label()">{{ $marker->board?->name }}</span>
+                                ])>{{ $marker->board?->name }}</span>
                         @endforeach
                         @foreach ($this->planMarkers->reject(fn ($marker) => $marker->isBoard()) as $marker)
                             @php($current = $planPointModel?->marker_id === $marker->id)
                             <button type="button" wire:key="marker-{{ $marker->id }}"
                                 wire:click="assignMarker({{ $marker->id }})"
                                 title="{{ $marker->points->pluck('symbol')->filter()->implode(', ') }}"
-                                style="left: {{ (float) $marker->x }}%; top: {{ (float) $marker->y }}%;"
+                                style="left: {{ (float) $marker->x }}%; top: {{ (float) $marker->y }}%; width: {{ $markerSize }}%; aspect-ratio: 1; font-size: {{ $markerSize * 0.42 }}cqw;"
                                 @class([
                                     'absolute -translate-x-1/2 -translate-y-1/2 rounded font-bold leading-none',
                                     'bg-zinc-900/10 ring-4 ring-zinc-900/60 dark:ring-white/70' => $current,
-                                ]) x-bind:style="dot()">
-                                {{-- Symbol wg rodzaju punktu (każdy rodzaj swój kolor), numer obok — jak w tabeli protokołu --}}
+                                ])>
+                                {{-- Symbol wg rodzaju punktu (każdy rodzaj swój kolor), numer pod nim — jak w wydruku --}}
                                 @php($kind = $marker->kind())
-                                <x-plan-symbol :kind="$kind" />
-                                <span class="absolute left-[78%] top-[-28%] rounded px-0.5 text-white shadow" style="background-color: {{ MeasurementMarker::COLORS[$kind] }}">{{ $marker->number }}@if ($marker->points->count() > 1)<span x-show="px() >= 16" class="font-normal"> ×{{ $marker->points->count() }}</span>@endif</span>
+                                <x-plan-symbol :kind="$kind" :rotation="$marker->rotation" />
+                                <span class="absolute left-1/2 top-full -translate-x-1/2 whitespace-nowrap rounded-full text-white" style="background-color: {{ MeasurementMarker::COLORS[$kind] }}; padding: 0.1em 0.35em; margin-top: 0.1em;">{{ $marker->number }}@if ($marker->points->count() > 1)<span class="font-normal"> ×{{ $marker->points->count() }}</span>@endif</span>
                             </button>
                         @endforeach
                     </div>
@@ -933,6 +948,7 @@ new class extends Component {
                     @endif
                     @if ($planPointModel?->marker)
                         <flux:button size="sm" icon="arrows-pointing-out" x-on:click="moving = {{ $planPointModel->marker->id }}">{{ __('Move marker') }}</flux:button>
+                        <flux:button size="sm" icon="arrow-path" wire:click="rotateMarker">{{ __('Rotate') }}</flux:button>
                         <flux:button size="sm" variant="ghost" icon="x-mark" wire:click="unassignPoint">{{ __('Remove from the plan') }}</flux:button>
                     @endif
                 </div>

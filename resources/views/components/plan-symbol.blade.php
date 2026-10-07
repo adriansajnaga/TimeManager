@@ -4,13 +4,13 @@
     Każdy rodzaj ma swój kolor (czerwona jest tylko rozdzielnica); biała obwódka pod kreskami — czytelność na rysunku.
     Rysunek 24×24 skalowany do rodzica; ten sam kształt rysuje PlanImage w PDF.
 --}}
-@props(['kind' => 'point', 'color' => null])
+@props(['kind' => 'point', 'color' => null, 'rotation' => 0])
 
 @php($color ??= \App\Models\MeasurementMarker::COLORS[$kind] ?? \App\Models\MeasurementMarker::COLORS['point'])
 
 <svg viewBox="0 0 24 24" fill="none" stroke-linecap="butt" {{ $attributes->merge(['class' => 'size-full overflow-visible']) }}>
     @foreach (['#ffffff' => 3.6, $color => 1.8] as $stroke => $width)
-        <g stroke="{{ $stroke }}" stroke-width="{{ $width }}">
+        <g stroke="{{ $stroke }}" stroke-width="{{ $width }}" transform="rotate({{ (int) $rotation }} 12 12)">
             @switch($kind)
                 @case('socket')
                 @case('socket3')
@@ -32,6 +32,8 @@
         </g>
     @endforeach
     @if ($kind === 'socket3')
-        <text x="23" y="25.5" font-size="8" font-weight="bold" fill="{{ $color }}" stroke="#ffffff" stroke-width="2" paint-order="stroke">3</text>
+        {{-- „3” w obróconym miejscu, ale zawsze pionowo (jak w PDF) --}}
+        @php([$tx, $ty] = [12 + (13 * cos(deg2rad($rotation)) - 13.5 * sin(deg2rad($rotation))), 12 + (13 * sin(deg2rad($rotation)) + 13.5 * cos(deg2rad($rotation)))])
+        <text x="{{ round($tx, 2) }}" y="{{ round($ty, 2) }}" text-anchor="middle" font-size="8" font-weight="bold" fill="{{ $color }}" stroke="#ffffff" stroke-width="2" paint-order="stroke">3</text>
     @endif
 </svg>

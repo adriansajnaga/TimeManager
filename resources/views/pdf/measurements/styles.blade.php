@@ -3,8 +3,9 @@
     h1 { font-size: 20pt; text-align: center; margin: 10mm 0 6mm; }
     h2 { font-size: 11pt; text-align: center; margin: 0 0 1mm; }
     h3 { font-size: 9pt; text-align: center; font-weight: normal; margin: 0 0 3mm; }
-    .company { font-size: 9pt; line-height: 1.4; }
-    .company .name { font-size: 12pt; font-weight: bold; }
+    /* Strona tytułowa: etykiety do prawej, wartości pogrubione, większe jak w dotychczasowym wzorze */
+    .title-meta td { font-size: 12pt; padding: 2.4mm 2mm; color: #000; }
+    .title-meta td.label { width: 58mm; color: #000; }
     .meta td { padding: 1.2mm 2mm; vertical-align: top; font-size: 10pt; }
     .meta td.label { width: 42mm; text-align: right; color: #333; }
     .meta td.value { font-weight: bold; }
