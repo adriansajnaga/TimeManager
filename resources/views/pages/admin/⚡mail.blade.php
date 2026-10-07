@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\MailLoginAttempt;
 use App\Models\MailSetting;
 use App\Services\Invoices\InvoiceMailer;
 use App\Services\Mailbox\ImapMailbox;
@@ -112,10 +113,13 @@ new #[Title('E-mail')] class extends Component {
                     ->subject(__('Test message from :app', ['app' => config('app.name')])),
             );
         } catch (Throwable $exception) {
+            MailLoginAttempt::record('SMTP', false, $exception->getMessage());
             $this->addError('test', $exception->getMessage());
 
             return;
         }
+
+        MailLoginAttempt::record('SMTP', true);
 
         $sentCopyError = InvoiceMailer::saveToSent($sent, $settings);
 
@@ -230,5 +234,41 @@ new #[Title('E-mail')] class extends Component {
             <flux:error name="test" />
             <flux:error name="mailbox" />
         </form>
+    </flux:card>
+
+    {{-- Każde logowanie aplikacji do serwera poczty — logów samego serwera (Dovecot, cPHulk) hosting nie udostępnia. --}}
+    <flux:card class="space-y-3">
+        <div>
+            <flux:heading>{{ __('Logins to the mail server') }}</flux:heading>
+            <flux:text size="sm">{{ __('Every time the app logged in to the mail server (last 300). The server itself keeps its own log, available only from the hosting support.') }}</flux:text>
+        </div>
+        <flux:table>
+            <flux:table.columns>
+                <flux:table.column>{{ __('Time') }}</flux:table.column>
+                <flux:table.column>{{ __('Protocol') }}</flux:table.column>
+                <flux:table.column>{{ __('Result') }}</flux:table.column>
+                <flux:table.column>{{ __('Person') }}</flux:table.column>
+                <flux:table.column>{{ __('Page') }}</flux:table.column>
+                <flux:table.column>{{ __('Server response') }}</flux:table.column>
+            </flux:table.columns>
+            <flux:table.rows>
+                @forelse (MailLoginAttempt::query()->with('user:id,name')->latest('id')->limit(50)->get() as $attempt)
+                    <flux:table.row :key="'attempt-'.$attempt->id">
+                        <flux:table.cell class="whitespace-nowrap tabular-nums">{{ $attempt->created_at?->format('d.m.Y H:i:s') }}</flux:table.cell>
+                        <flux:table.cell>{{ $attempt->protocol }}</flux:table.cell>
+                        <flux:table.cell>
+                            <flux:badge size="sm" :color="$attempt->succeeded ? 'green' : 'red'">{{ $attempt->succeeded ? __('OK') : __('Rejected') }}</flux:badge>
+                        </flux:table.cell>
+                        <flux:table.cell>{{ $attempt->user?->name ?? '—' }}</flux:table.cell>
+                        <flux:table.cell class="max-w-48 truncate text-xs">{{ $attempt->page ?? '—' }}</flux:table.cell>
+                        <flux:table.cell class="max-w-96 whitespace-normal text-xs">{{ $attempt->message ?? '—' }}</flux:table.cell>
+                    </flux:table.row>
+                @empty
+                    <flux:table.row>
+                        <flux:table.cell colspan="6" class="text-center">{{ __('No logins recorded yet.') }}</flux:table.cell>
+                    </flux:table.row>
+                @endforelse
+            </flux:table.rows>
+        </flux:table>
     </flux:card>
 </section>

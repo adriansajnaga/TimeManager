@@ -2,6 +2,7 @@
 
 namespace App\Services\Mailbox;
 
+use App\Models\MailLoginAttempt;
 use App\Models\MailSetting;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
@@ -276,6 +277,8 @@ final class ImapMailbox implements Mailbox
         try {
             $client->connect();
         } catch (Throwable $exception) {
+            MailLoginAttempt::record('IMAP', false, self::serverMessage($exception));
+
             if (self::isAuthFailure($exception)) {
                 MailSetting::blockLogin();
                 Log::warning('IMAP login rejected; mailbox login blocked until new credentials or a manual test.', ['host' => $this->settings->imap_host, 'user' => $this->settings->username]);
@@ -284,7 +287,23 @@ final class ImapMailbox implements Mailbox
             throw $exception;
         }
 
+        MailLoginAttempt::record('IMAP', true);
+
         return $client;
+    }
+
+    /**
+     * Najbardziej szczegółowy komunikat z łańcucha wyjątków (odpowiedź serwera, np. „NO [AUTHENTICATIONFAILED]”).
+     */
+    public static function serverMessage(Throwable $exception): string
+    {
+        $messages = [];
+
+        for ($current = $exception; $current !== null; $current = $current->getPrevious()) {
+            $messages[] = $current->getMessage();
+        }
+
+        return implode(' ← ', array_unique(array_filter($messages)));
     }
 
     /**

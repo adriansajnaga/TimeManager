@@ -10,6 +10,7 @@ use App\Enums\Language;
 use App\Mail\InvoiceMail;
 use App\Models\EmailLog;
 use App\Models\Invoice;
+use App\Models\MailLoginAttempt;
 use App\Models\MailSetting;
 use App\Models\User;
 use App\Services\Mailbox\ImapMailbox;
@@ -109,6 +110,7 @@ final class InvoiceMailer
         } catch (Throwable $exception) {
             report($exception);
             $log->forceFill(['error' => $exception->getMessage()])->save();
+            MailLoginAttempt::record('SMTP', false, $exception->getMessage());
 
             // Ten sam login co skrzynka: po odrzuconym haśle SMTP też przestajemy próbować.
             if (str_contains($exception->getMessage(), '535') || ImapMailbox::isAuthFailure($exception)) {
@@ -118,6 +120,7 @@ final class InvoiceMailer
             throw new InvoiceException(__('The e-mail was not sent: :message', ['message' => $exception->getMessage()]));
         }
 
+        MailLoginAttempt::record('SMTP', true);
         $log->forceFill(['sent_at' => now()])->save();
         $invoice->forceFill(['emailed_at' => now()])->save();
 

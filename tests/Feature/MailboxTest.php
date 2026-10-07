@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Invoice;
+use App\Models\MailLoginAttempt;
 use App\Models\MailSetting;
 use App\Models\User;
 use App\Services\Invoices\InvoiceException;
@@ -325,4 +326,28 @@ test('trash and spam can be emptied at once, other folders cannot', function () 
         ->and(MailFolder::looksLikeSpam('INBOX.Junk'))->toBeTrue()
         ->and(MailFolder::looksLikeSpam('INBOX.spam'))->toBeTrue()
         ->and(MailFolder::looksLikeSpam('INBOX'))->toBeFalse();
+});
+
+test('every login to the mail server is recorded and listed in the e-mail settings', function () {
+    MailSetting::query()->create([
+        'host' => 'mail.ascomm.test', 'from_address' => 'faktury@ascomm.test',
+        'username' => 'faktury@ascomm.test', 'password' => 'secret', 'imap_host' => 'imap.invalid',
+    ]);
+    $admin = User::factory()->admin()->create(['name' => 'Adrian Admin']);
+    $this->actingAs($admin);
+
+    // Nieistniejący serwer — próba się nie udaje, ale zostaje zapisana.
+    expect(fn () => ImapMailbox::fromSettings()->ping())->toThrow(MailboxException::class);
+
+    $attempt = MailLoginAttempt::query()->sole();
+    expect($attempt->protocol)->toBe('IMAP')
+        ->and($attempt->succeeded)->toBeFalse()
+        ->and($attempt->user_id)->toBe($admin->id);
+
+    // Zablokowane logowanie nie łączy się z serwerem — nic nowego w dzienniku.
+    MailSetting::blockLogin();
+    expect(fn () => ImapMailbox::fromSettings()->ping())->toThrow(MailboxException::class);
+    expect(MailLoginAttempt::query()->count())->toBe(1);
+
+    $this->get(route('admin.mail'))->assertOk()->assertSee(__('Logins to the mail server'))->assertSee('Adrian Admin');
 });
