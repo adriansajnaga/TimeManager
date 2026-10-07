@@ -61,6 +61,14 @@ class MeasurementMarker extends Model
         return $this->belongsTo(MeasurementBoard::class, 'board_id');
     }
 
+    /** Kolory symboli na rzucie — czerwona jest tylko rozdzielnica. */
+    public const COLORS = [
+        'socket' => '#2563eb',
+        'socket3' => '#7c3aed',
+        'light' => '#d97706',
+        'point' => '#059669',
+    ];
+
     /**
      * Symbol na rzucie wg pierwszego punktu (kilka gniazd obok siebie to jeden znacznik).
      *

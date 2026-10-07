@@ -4,7 +4,10 @@
 
 <table width="100%">
     <tr>
-        <td class="company">
+        @if ($logo)
+            <td style="width: 45%; vertical-align: middle;"><img src="{{ $logo }}" style="max-height: 22mm; max-width: 75mm;" alt=""></td>
+        @endif
+        <td class="company" @if ($logo) style="text-align: right; vertical-align: middle;" @endif>
             <div class="name">{{ $company->name }}</div>
             {{ trim($company->street.', '.$company->zip.' '.$company->city, ', ') }}<br>
             @if ($company->email) mail: {{ $company->email }}<br> @endif

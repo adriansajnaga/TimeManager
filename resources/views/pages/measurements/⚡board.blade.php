@@ -914,11 +914,12 @@ new class extends Component {
                                 style="left: {{ (float) $marker->x }}%; top: {{ (float) $marker->y }}%;"
                                 @class([
                                     'absolute -translate-x-1/2 -translate-y-1/2 rounded font-bold leading-none',
-                                    'bg-blue-100/70 ring-4 ring-blue-300' => $current,
+                                    'bg-zinc-900/10 ring-4 ring-zinc-900/60 dark:ring-white/70' => $current,
                                 ]) x-bind:style="dot()">
-                                {{-- Symbol wg rodzaju punktu, numer obok (jak w tabeli protokołu) --}}
-                                <x-plan-symbol :kind="$marker->kind()" :color="$current ? '#2563eb' : '#dc2626'" />
-                                <span @class(['absolute left-[78%] top-[-28%] rounded px-0.5 text-white shadow', 'bg-blue-600' => $current, 'bg-red-600' => ! $current])>{{ $marker->number }}@if ($marker->points->count() > 1)<span x-show="px() >= 16" class="font-normal"> ×{{ $marker->points->count() }}</span>@endif</span>
+                                {{-- Symbol wg rodzaju punktu (każdy rodzaj swój kolor), numer obok — jak w tabeli protokołu --}}
+                                @php($kind = $marker->kind())
+                                <x-plan-symbol :kind="$kind" />
+                                <span class="absolute left-[78%] top-[-28%] rounded px-0.5 text-white shadow" style="background-color: {{ MeasurementMarker::COLORS[$kind] }}">{{ $marker->number }}@if ($marker->points->count() > 1)<span x-show="px() >= 16" class="font-normal"> ×{{ $marker->points->count() }}</span>@endif</span>
                             </button>
                         @endforeach
                     </div>

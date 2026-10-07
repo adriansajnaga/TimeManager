@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Rzut z naniesionymi znacznikami punktów (symbol gniazda, oświetlenia, punktu i numer) — obraz do raportu PDF.
+ * Rzut z naniesionymi znacznikami punktów (symbol gniazda, oświetlenia, punktu w kolorze rodzaju i numer) — obraz do raportu PDF.
  */
 final class PlanImage
 {
@@ -69,8 +69,10 @@ final class PlanImage
 
             // Symbol większy od dawnego kółka — kreski gniazda trójfazowego muszą być czytelne.
             $symbol = (int) round($radius * 1.6);
-            $this->symbol($image, $marker->kind(), $x, $y, $symbol, $red, $white);
-            $this->number($image, (string) $marker->number, $x + (int) round($symbol * 0.75), $y - (int) round($symbol * 0.45), $radius, $font, $red, $white);
+            $kind = $marker->kind();
+            $color = $this->color($image, MeasurementMarker::COLORS[$kind]);
+            $this->symbol($image, $kind, $x, $y, $symbol, $color, $white, $font);
+            $this->number($image, (string) $marker->number, $x + (int) round($symbol * 0.75), $y - (int) round($symbol * 0.45), $radius, $font, $color, $white);
         }
 
         $directory = storage_path('app/mpdf');
@@ -82,75 +84,81 @@ final class PlanImage
     }
 
     /**
-     * Symbol jak w przeglądarce (components/plan-symbol): siatka 24×24 wpisana w kwadrat 2r wokół punktu.
+     * Symbol jak w przeglądarce (components/plan-symbol): siatka 24×24 wpisana w kwadrat 2r wokół punktu,
+     * najpierw biała obwódka, potem kreski w kolorze rodzaju.
      *
      * @param  'socket'|'socket3'|'light'|'point'  $kind
      */
-    private function symbol(\GdImage $image, string $kind, int $x, int $y, int $radius, int $red, int $white): void
+    private function symbol(\GdImage $image, string $kind, int $x, int $y, int $radius, int $color, int $white, string $font): void
     {
         $unit = 2 * $radius / 24;
-        $thickness = max(2, (int) round(2.2 * $unit));
-        $at = fn (float $gx, float $gy): array => [(int) round($x - $radius + $gx * $unit), (int) round($y - $radius + $gy * $unit)];
-        $line = function (float $x1, float $y1, float $x2, float $y2, ?int $width = null) use ($image, $at, $red, $thickness): void {
-            [$ax, $ay] = $at($x1, $y1);
-            [$bx, $by] = $at($x2, $y2);
-            imagesetthickness($image, $width ?? $thickness);
-            imageline($image, $ax, $ay, $bx, $by, $red);
-        };
-        // Pierścień / półpierścień: czerwone koło o promieniu r + t/2, w środku białe r − t/2 — gładki obrys bez szczerb.
-        $ring = function (float $cx, float $cy, float $r, bool $half) use ($image, $at, $unit, $thickness, $red, $white): void {
-            [$px, $py] = $at($cx, $cy);
-            $outer = (int) round(2 * $r * $unit + $thickness);
-            $inner = (int) round(2 * $r * $unit - $thickness);
-            imagesetthickness($image, 1);
+        $at = fn (float $gx, float $gy): array => [$x - $radius + $gx * $unit, $y - $radius + $gy * $unit];
 
-            if ($half) {
-                imagefilledarc($image, $px, $py, $outer, $outer, 180, 360, $red, IMG_ARC_PIE);
-                imagefilledarc($image, $px, $py, $inner, $inner, 180, 360, $white, IMG_ARC_PIE);
-            } else {
-                imagefilledellipse($image, $px, $py, $outer, $outer, $red);
-                imagefilledellipse($image, $px, $py, $inner, $inner, $white);
+        // Linia łamana grubości $width: odcinki + kółka w węzłach (bez szczerb na łukach).
+        $stroke = function (array $points, int $paint, float $width) use ($image, $at): void {
+            $pixels = array_map(fn (array $point) => $at(...$point), $points);
+            imagesetthickness($image, max(1, (int) round($width)));
+
+            for ($i = 1; $i < count($pixels); $i++) {
+                imageline($image, (int) round($pixels[$i - 1][0]), (int) round($pixels[$i - 1][1]), (int) round($pixels[$i][0]), (int) round($pixels[$i][1]), $paint);
             }
+
+            if (count($pixels) > 2) {
+                foreach ($pixels as [$px, $py]) {
+                    imagefilledellipse($image, (int) round($px), (int) round($py), (int) round($width), (int) round($width), $paint);
+                }
+            }
+
+            imagesetthickness($image, 1);
+        };
+        $arc = function (float $cx, float $cy, float $r, int $from, int $to): array {
+            $points = [];
+
+            for ($angle = $from; $angle <= $to; $angle += 6) {
+                $points[] = [$cx + $r * cos(deg2rad($angle)), $cy + $r * sin(deg2rad($angle))];
+            }
+
+            return $points;
         };
 
-        switch ($kind) {
-            case 'socket':
-            case 'socket3':
-                // Półkole (kopuła) zamknięte średnicą, bolec ochronny nad nim, przewód w dół.
-                $ring(12, 13, 8, true);
-                $line(3, 13, 21, 13);
-                $line(6, 3.5, 18, 3.5);
-                $line(12, 13, 12, 23);
+        $shapes = match ($kind) {
+            // Łuk otwarty u dołu, pozioma kreska (styk ochronny) i przewód w górę.
+            'socket', 'socket3' => array_filter([
+                $arc(12, 23, 8.6, 180, 360),
+                [[3, 14], [21, 14]],
+                [[12, 1], [12, 14]],
+                $kind === 'socket3' ? [[17.7, 21.4], [25.4, 13.5]] : null,
+            ]),
+            'light' => [$arc(12, 12, 9, 0, 360), [[5.6, 5.6], [18.4, 18.4]], [[18.4, 5.6], [5.6, 18.4]]],
+            default => [[[5, 5], [19, 5], [19, 19], [5, 19], [5, 5]]],
+        };
 
-                if ($kind === 'socket3') {
-                    $slash = max(2, (int) round(1.6 * $unit));
-                    $line(9.5, 16.5, 14.5, 14.5, $slash);
-                    $line(9.5, 19.5, 14.5, 17.5, $slash);
-                    $line(9.5, 22.5, 14.5, 20.5, $slash);
-                }
-                break;
-
-            case 'light':
-                $ring(12, 12, 9, false);
-                $line(5.6, 5.6, 18.4, 18.4);
-                $line(18.4, 5.6, 5.6, 18.4);
-                break;
-
-            default:
-                [$ax, $ay] = $at(5, 5);
-                [$bx, $by] = $at(19, 19);
-                $half = intdiv($thickness, 2);
-                imagefilledrectangle($image, $ax - $half, $ay - $half, $bx + $half, $by + $half, $red);
-                imagefilledrectangle($image, $ax + $half, $ay + $half, $bx - $half, $by - $half, $white);
+        foreach ([[$white, 3.6], [$color, 1.8]] as [$paint, $width]) {
+            foreach ($shapes as $points) {
+                $stroke($points, $paint, max(2, $width * $unit));
+            }
         }
 
-        imagesetthickness($image, 1);
+        if ($kind === 'socket3') {
+            [$tx, $ty] = $at(23, 25.5);
+            imagettftext($image, 8 * $unit * 0.75, 0, (int) round($tx), (int) round($ty), $color, $font, '3');
+        }
+    }
+
+    /**
+     * Kolor GD z zapisu „#rrggbb”.
+     */
+    private function color(\GdImage $image, string $hex): int
+    {
+        $channel = fn (int $offset): int => max(0, min(255, (int) hexdec(substr($hex, $offset, 2))));
+
+        return (int) imagecolorallocate($image, $channel(1), $channel(3), $channel(5));
     }
 
     /**
      * Numer znacznika w czerwonej plakietce przy symbolu (lewy dolny róg plakietki w punkcie $left, $bottom).
      */
-    private function number(\GdImage $image, string $label, int $left, int $bottom, int $radius, string $font, int $red, int $white): void
+    private function number(\GdImage $image, string $label, int $left, int $bottom, int $radius, string $font, int $color, int $white): void
     {
         $size = $radius * 0.8;
         $box = imagettfbbox($size, 0, $font, $label);
@@ -164,7 +172,7 @@ final class PlanImage
         $pad = (int) max(2, round($radius * 0.18));
         $top = $bottom - $textHeight - 2 * $pad;
 
-        imagefilledrectangle($image, $left, $top, $left + $textWidth + 2 * $pad, $bottom, $red);
+        imagefilledrectangle($image, $left, $top, $left + $textWidth + 2 * $pad, $bottom, $color);
         imagettftext($image, $size, 0, $left + $pad - $box[0], $bottom - $pad, $white, $font, $label);
     }
 

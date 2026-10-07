@@ -133,9 +133,15 @@ final class ReportRenderer
             ($protocol->instrument?->attachments->isNotEmpty() ?? false) ? 'Świadectwo wzorcowania miernika' : null,
         ]));
 
+        $company = CompanySetting::current();
+
         return [
             'protocol' => $protocol,
-            'company' => CompanySetting::current(),
+            'company' => $company,
+            // Logo firmy z ustawień (jak na fakturach) — na pierwszej stronie protokołu.
+            'logo' => $company->logo_path !== null && Storage::disk('local')->exists($company->logo_path)
+                ? Storage::disk('local')->path($company->logo_path)
+                : null,
             'boards' => $boards,
             'supply' => $supply,
             'hasPoints' => $hasPoints,
