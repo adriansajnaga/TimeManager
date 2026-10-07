@@ -669,7 +669,7 @@ new class extends Component {
             @php($results = $circuit->points->map(fn ($point) => $point->passes($za))->filter(fn ($result) => $result !== null))
             @php($npeResults = $withNpe ? $circuit->points->map(fn ($point) => $point->passes($za, npe: true))->filter(fn ($result) => $result !== null) : collect())
             @php($insulationOk = $circuit->insulationPasses())
-            @php($worst = $results->merge($npeResults)->push($insulationOk)->filter(fn ($result) => $result !== null))
+            @php($worst = $results->toBase()->merge($npeResults)->push($insulationOk)->filter(fn ($result) => $result !== null))
             @php($isOpen = $open === $circuit->id)
 
             <flux:card wire:key="circuit-{{ $circuit->id }}" class="p-0">
@@ -679,7 +679,7 @@ new class extends Component {
                     <span class="min-w-0 flex-1 truncate">{{ $circuit->name }}</span>
                     <span class="hidden text-sm text-zinc-500 sm:inline">{{ $circuit->protectionLabel() }}{{ $circuit->rcd ? ' · '.$circuit->rcd->designation : '' }}</span>
                     <span class="text-sm text-zinc-500">{{ $results->count() }}/{{ $circuit->points->count() }}</span>
-                    <x-measure-verdict :passes="$worst->isEmpty() ? null : ! $worst->contains(false)" />
+                    <x-measure-verdict :passes="$worst->isEmpty() ? null : ! $worst->containsStrict(false)" />
                     <flux:icon :name="$isOpen ? 'chevron-up' : 'chevron-down'" class="size-4 text-zinc-400" />
                 </button>
 

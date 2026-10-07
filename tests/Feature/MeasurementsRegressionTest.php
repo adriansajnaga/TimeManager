@@ -38,3 +38,14 @@ test('the board page opens after renaming the board and removing markers', funct
     $this->get(route('measurements.report', $protocol))->assertOk();
     $this->get(route('measurements.layout', [$protocol, $board]))->assertOk();
 });
+
+test('the board page opens for a circuit with insulation results but no points', function () {
+    $protocol = MeasurementProtocol::query()->create([...MeasurementProtocol::nextNumber(now()), 'place' => 'Toruń', 'measured_on' => now()->toDateString()]);
+    $protocol->refresh();
+    $board = $protocol->boards()->create(['position' => 1, 'name' => 'R2']);
+    $board->circuits()->create(['position' => 1, 'number' => '1F1', 'name' => 'Oświetlenie', 'protection_type' => ProtectionType::B, 'protection_current' => 10, 'insulation' => ['L-N' => '>30']]);
+    $board->circuits()->create(['position' => 2, 'number' => '1F2', 'name' => 'Brama', 'protection_type' => ProtectionType::B, 'protection_current' => 10, 'insulation' => ['L-N' => '0.2']]);
+
+    $this->actingAs($this->admin)->get(route('measurements.board', [$protocol, $board]))->assertOk()->assertSee('Oświetlenie');
+    $this->get(route('measurements.report', $protocol))->assertOk();
+});
