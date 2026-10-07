@@ -44,7 +44,7 @@ class MailLoginAttempt extends Model
             'succeeded' => $succeeded,
             'message' => $message === null ? null : Str::limit($message, 490),
             'user_id' => Auth::id(),
-            'page' => is_string($page) ? Str::limit($page, 250) : null,
+            'page' => Str::limit($page, 250),
         ]);
 
         $cutoff = static::query()->latest('id')->skip(self::KEEP)->value('id');
