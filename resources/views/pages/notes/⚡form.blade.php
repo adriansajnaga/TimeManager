@@ -54,6 +54,41 @@ new class extends ComponentWithAttachments {
         $this->note = $note->refresh();
     }
 
+    /** Zapis automatyczny: chwilę po wpisaniu tytułu lub treści (nowa notatka — gdy ma tytuł). */
+    public function updatedTitle(): void
+    {
+        $this->autosave();
+    }
+
+    public function updatedBody(): void
+    {
+        $this->autosave();
+    }
+
+    private function autosave(): void
+    {
+        if (trim($this->title) === '') {
+            return;
+        }
+
+        $this->authorize('manage-notes');
+        $this->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'body' => ['nullable', 'string', 'max:1000000'],
+        ]);
+
+        $creating = $this->note === null;
+        $note = $this->note ?? new Note(['user_id' => auth()->id()]);
+        $note->fill(['title' => trim($this->title), 'body' => $this->body !== '' ? $this->body : null])->save();
+        $this->note = $note->refresh();
+
+        if ($creating) {
+            // Pliki wybrane przed nadaniem tytułu dołączamy od razu; adres strony bez przeładowania.
+            $this->storeUploads($note);
+            $this->js('window.history.replaceState({}, "", '.json_encode(route('notes.edit', $note)).')');
+        }
+    }
+
     public function delete(): void
     {
         $this->authorize('manage-notes');
@@ -93,13 +128,16 @@ new class extends ComponentWithAttachments {
                     <flux:button variant="danger" icon="trash" wire:click="delete"
                         wire:confirm="{{ __('Delete this note together with its files?') }}">{{ __('Delete') }}</flux:button>
                 @endif
-                <flux:button variant="primary" type="submit">{{ __('Save') }}</flux:button>
             </div>
         </div>
 
         <flux:card class="space-y-6">
-            <flux:input wire:model="title" :label="__('Title')" required autofocus />
-            <flux:textarea wire:model="body" :label="__('Text')" rows="14" resize="vertical" />
+            <flux:input wire:model.live.debounce.800ms="title" :label="__('Title')" required autofocus />
+            <flux:textarea wire:model.live.debounce.1500ms="body" :label="__('Text')" rows="14" resize="vertical" />
+            <flux:text size="sm" class="text-zinc-500">
+                <span wire:loading wire:target="title, body">{{ __('Saving…') }}</span>
+                <span wire:loading.remove wire:target="title, body">{{ $note ? __('Saved automatically.') : __('The note is saved automatically once it has a title.') }}</span>
+            </flux:text>
         </flux:card>
 
         <x-attachments :owner="$note" :uploads="$uploads" />

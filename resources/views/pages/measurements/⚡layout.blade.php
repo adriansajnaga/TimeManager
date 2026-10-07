@@ -260,19 +260,26 @@ new class extends Component {
                             <span class="flex h-28 items-end justify-center overflow-hidden px-0.5 pb-1">
                                 <span class="text-[0.6rem] leading-tight text-zinc-600 [writing-mode:vertical-rl] rotate-180 dark:text-zinc-300">{{ $item['desc'] }}</span>
                             </span>
+                            {{-- Moduł jak aparat: numer, dźwigienka, zabezpieczenie --}}
                             <span @class([
-                                'flex h-12 items-center justify-center border text-xs font-semibold',
+                                'flex h-24 flex-col items-center justify-between rounded-[3px] border py-1.5 text-xs font-semibold shadow-sm',
                                 'border-zinc-500 bg-zinc-300 text-zinc-900' => in_array($item['t'], ['rcd', 'device'], true),
                                 'border-zinc-500 bg-white text-zinc-900' => $item['t'] === 'circuit',
-                                'border-dashed border-zinc-400 bg-transparent' => $item['t'] === 'gap',
+                                'border-dashed border-zinc-400 bg-transparent shadow-none' => $item['t'] === 'gap',
                                 'ring-4 ring-blue-500 relative z-10' => $isSelected,
-                            ])><span class="flex flex-col items-center leading-tight">{{ $item['label'] }}@if ($item['sub'] !== '')<span class="text-[0.55rem] font-normal">{{ $item['sub'] }}</span>@endif</span></span>
+                            ])>
+                                @if ($item['t'] !== 'gap')
+                                    <span class="leading-none">{{ $item['label'] }}</span>
+                                    <span class="h-7 w-2.5 rounded-sm bg-zinc-700"></span>
+                                    <span class="text-[0.55rem] font-normal leading-none">{{ $item['sub'] }}</span>
+                                @endif
+                            </span>
                         </button>
                     @endforeach
                     @for ($i = $used; $i < $layout['rail']; $i++)
                         <span class="flex shrink-0 flex-col" style="width: 2.25rem;">
                             <span class="h-28"></span>
-                            <span class="h-12 border border-zinc-300 dark:border-zinc-600"></span>
+                            <span class="h-24 rounded-[3px] border border-zinc-300 bg-zinc-50 dark:border-zinc-600 dark:bg-white/5"></span>
                         </span>
                     @endfor
                 </div>

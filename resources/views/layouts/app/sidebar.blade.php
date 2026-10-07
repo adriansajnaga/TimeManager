@@ -107,6 +107,9 @@
                             <flux:sidebar.item icon="envelope" :href="route('admin.mail')" :current="request()->routeIs('admin.mail')" wire:navigate>
                                 {{ __('E-mail') }}
                             </flux:sidebar.item>
+                            <flux:sidebar.item icon="exclamation-triangle" :href="route('admin.logs')" :current="request()->routeIs('admin.logs')" wire:navigate>
+                                {{ __('Error log') }}
+                            </flux:sidebar.item>
                             {{-- Import tylko do czasu pierwszego importu ze starej aplikacji. --}}
                             @if (\App\Services\LegacyImport\LegacyImporter::isConfigured() && ! \App\Models\TimeEntry::query()->whereNotNull('legacy_id')->exists())
                                 <flux:sidebar.item icon="arrow-down-tray" :href="route('admin.legacy-import')" :current="request()->routeIs('admin.legacy-import')" wire:navigate>

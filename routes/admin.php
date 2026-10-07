@@ -19,5 +19,6 @@ Route::middleware(['auth', 'verified'])->prefix('admin')->name('admin.')->group(
         Route::livewire('ai', 'pages::admin.ai')->name('ai');
         Route::livewire('ksef', 'pages::admin.ksef')->name('ksef');
         Route::livewire('mail', 'pages::admin.mail')->name('mail');
+        Route::livewire('logs', 'pages::admin.logs')->name('logs');
     });
 });

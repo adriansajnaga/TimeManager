@@ -1,6 +1,6 @@
 {{--
     Szyny rozdzielnicy: $rows (BoardLayout::resolved), $rail (moduły na szynie), $module (mm na moduł),
-    $descHeight (mm na pionowy opis nad modułem). Wolne moduły — osobne puste kratki.
+    $descHeight (mm na opis nad modułem), $boxHeight (mm wysokości modułu). Wolne moduły — puste zaślepki.
 --}}
 @foreach ($rows as $items)
     @php($used = array_sum(array_column($items, 'w')))
@@ -20,18 +20,22 @@
             @endfor
         </tr>
         <tr>
+            {{-- Moduł jak aparat: numer u góry, dźwigienka, zabezpieczenie na dole. --}}
             @foreach ($items as $item)
-                <td style="width: {{ $item['w'] * $module }}mm; height: {{ $module >= 15 ? 12 : 11 }}mm; text-align: center; vertical-align: middle; font-size: {{ $module >= 15 ? 8.5 : 7.5 }}pt; font-weight: bold;
+                <td style="width: {{ $item['w'] * $module }}mm; height: {{ $boxHeight }}mm; text-align: center; vertical-align: middle; padding: 1mm 0;
                     border: {{ $item['t'] === 'gap' ? '0.2mm dashed #999' : '0.3mm solid #333' }};
                     background-color: {{ $item['t'] === 'circuit' || $item['t'] === 'gap' ? '#ffffff' : '#d9d9d9' }};">
-                    {{ $item['label'] }}
-                    @if ($item['sub'] !== '')
-                        <br><span style="font-size: {{ $module >= 15 ? 6.5 : 5.5 }}pt; font-weight: normal;">{{ $item['sub'] }}</span>
+                    @if ($item['t'] !== 'gap')
+                        <div style="font-size: {{ $module >= 15 ? 8.5 : 7.5 }}pt; font-weight: bold;">{{ $item['label'] }}</div>
+                        <table style="margin: 1.2mm auto; border-collapse: collapse;">
+                            <tr><td style="width: {{ min(3.5, $module * 0.22) }}mm; height: {{ $boxHeight * 0.32 }}mm; background-color: #3f3f46; border: none; padding: 0;"></td></tr>
+                        </table>
+                        <div style="font-size: {{ $module >= 15 ? 6.5 : 5.5 }}pt;">{{ $item['sub'] }}</div>
                     @endif
                 </td>
             @endforeach
             @for ($i = 0; $i < $free; $i++)
-                <td style="width: {{ $module }}mm; border: 0.3mm solid #333;"></td>
+                <td style="width: {{ $module }}mm; height: {{ $boxHeight }}mm; border: 0.3mm solid #333; background-color: #fafafa;"></td>
             @endfor
         </tr>
     </table>

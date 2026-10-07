@@ -271,7 +271,12 @@ new #[Title('Invoices')] class extends Component {
             <flux:table.column>{{ __('Type') }}</flux:table.column>
             <flux:table.column>{{ __('Issue date') }}</flux:table.column>
             <flux:table.column>{{ $isSales ? __('Buyer') : __('Supplier') }}</flux:table.column>
-            <flux:table.column align="end">{{ __('Net') }}</flux:table.column>
+            {{-- Zakupy: NIP sprzedawcy zamiast kwoty netto. --}}
+            @if ($isSales)
+                <flux:table.column align="end">{{ __('Net') }}</flux:table.column>
+            @else
+                <flux:table.column>{{ __('Tax ID') }}</flux:table.column>
+            @endif
             <flux:table.column align="end">{{ __('Gross') }}</flux:table.column>
             <flux:table.column>{{ __('Status') }}</flux:table.column>
             <flux:table.column>{{ __('Payment') }}</flux:table.column>
@@ -286,7 +291,11 @@ new #[Title('Invoices')] class extends Component {
                     <flux:table.cell><flux:badge size="sm" color="zinc">{{ $invoice->kind->shortLabel() }}</flux:badge></flux:table.cell>
                     <flux:table.cell>{{ $invoice->issue_date->format('d.m.Y') }}</flux:table.cell>
                     <flux:table.cell>{{ $invoice->counterparty_name ?? '—' }}</flux:table.cell>
-                    <flux:table.cell align="end">{{ $money($invoice->net, $invoice->currency) }}</flux:table.cell>
+                    @if ($isSales)
+                        <flux:table.cell align="end">{{ $money($invoice->net, $invoice->currency) }}</flux:table.cell>
+                    @else
+                        <flux:table.cell class="whitespace-nowrap tabular-nums">{{ $invoice->counterparty_tax_id ?: '—' }}</flux:table.cell>
+                    @endif
                     <flux:table.cell align="end">{{ $money($invoice->gross, $invoice->currency) }}</flux:table.cell>
                     <flux:table.cell><flux:badge size="sm" :color="$invoice->status->color()">{{ $invoice->status->label() }}</flux:badge></flux:table.cell>
                     <flux:table.cell>

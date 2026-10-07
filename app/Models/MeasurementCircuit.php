@@ -53,6 +53,7 @@ class MeasurementCircuit extends Model
             $this->protection_current === null ? null : (float) $this->protection_current,
             $protocol->disconnectionTime(),
             $this->trip_current_override === null ? null : (float) $this->trip_current_override,
+            distribution: $this->board->isSupply(),
         );
     }
 

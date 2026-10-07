@@ -261,6 +261,7 @@ new class extends Component {
             $circuit->protection_type,
             $circuit->protection_current === null ? null : (float) $circuit->protection_current,
             $this->protocol->disconnectionTime(),
+            distribution: $this->board->isSupply(),
         );
 
         return $auto !== null && abs($auto - (float) $value) < 0.05 ? null : $value;
@@ -377,6 +378,11 @@ new class extends Component {
 
     public function openBoardPlan(): void
     {
+        // WLZ to odcinek kabla, nie rozdzielnica — nie stawiamy jej na rzucie.
+        if ($this->board->isSupply()) {
+            return;
+        }
+
         if ($this->plans->isEmpty()) {
             Flux::toast(variant: 'warning', text: __('Add a floor plan image to the protocol first (Drawings and attachments).'));
 
@@ -587,7 +593,9 @@ new class extends Component {
             @unless ($board->isSupply())
                 <flux:button size="sm" icon="view-columns" :href="route('measurements.layout', [$protocol, $board])" wire:navigate>{{ __('Elevation') }}</flux:button>
             @endunless
-            <flux:button size="sm" icon="map-pin" wire:click="openBoardPlan">{{ __('On the plan') }}</flux:button>
+            @unless ($board->isSupply())
+                <flux:button size="sm" icon="map-pin" wire:click="openBoardPlan">{{ __('On the plan') }}</flux:button>
+            @endunless
             <flux:dropdown>
                 <flux:button icon="ellipsis-vertical" size="sm" :aria-label="__('More')" />
                 <flux:menu>

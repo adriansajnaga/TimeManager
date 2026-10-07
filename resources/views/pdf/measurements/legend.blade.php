@@ -13,7 +13,7 @@
     <p style="font-size: 7pt; color: #666; margin: 0;">Skala 1:1 (moduł 18 mm) — wydrukuj bez dopasowania do strony, wytnij szyny i przyłóż nad aparatami.</p>
 @endif
 
-@include('pdf.measurements.partials.rails', ['rows' => $rows, 'rail' => $rail, 'module' => $module, 'descHeight' => 28])
+@include('pdf.measurements.partials.rails', ['rows' => $rows, 'rail' => $rail, 'module' => $module, 'descHeight' => 26, 'boxHeight' => $module >= 15 ? 24 : 20])
 
 <pagebreak orientation="landscape" />
 <h2 style="text-align: left;">Rozdzielnica {{ $board->name }} — który bezpiecznik od czego</h2>

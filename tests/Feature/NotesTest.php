@@ -181,3 +181,19 @@ test('a document gets a caption and an expiry date and shows up on the dashboard
 
     expect($document->refresh()->expires_at)->toBeNull();
 });
+
+test('a note is saved automatically while typing', function () {
+    $this->actingAs($this->admin);
+
+    $page = Livewire::test('pages::notes.form')
+        ->set('body', 'Bez tytułu jeszcze nie zapisujemy.');
+    expect(Note::query()->count())->toBe(0);
+
+    $page->set('title', 'Klucz do rozdzielni');
+    $note = Note::query()->sole();
+    expect($note->title)->toBe('Klucz do rozdzielni')->and($note->body)->toBe('Bez tytułu jeszcze nie zapisujemy.');
+
+    $page->set('body', 'U kierownika budowy.');
+    expect($note->fresh()->body)->toBe('U kierownika budowy.')
+        ->and(Note::query()->count())->toBe(1);
+});

@@ -19,7 +19,7 @@ final class Criteria
      */
     public const GG_TRIP_CURRENTS = [
         'ta04' => [2 => 15, 4 => 30, 6 => 46, 10 => 77, 16 => 110, 20 => 135, 25 => 180, 32 => 260, 40 => 327, 50 => 420, 63 => 537],
-        'ta5' => [2 => 9.2, 4 => 18.5, 6 => 28, 10 => 48, 16 => 65, 20 => 85, 25 => 110, 32 => 150, 40 => 190, 50 => 250, 63 => 320, 80 => 425, 100 => 580, 125 => 715, 160 => 950],
+        'ta5' => [2 => 9.2, 4 => 18.5, 6 => 28, 10 => 48, 16 => 65, 20 => 85, 25 => 110, 32 => 150, 40 => 190, 50 => 250, 63 => 320, 80 => 425, 100 => 580, 125 => 715, 160 => 950, 200 => 1250, 250 => 1650, 315 => 2200, 400 => 2840, 500 => 3800, 630 => 5100],
     ];
 
     /** Czas zadziałania RCD przy 1×IΔn [ms]: bezzwłoczny ≤ 300, selektywny (S) 130–500. */
@@ -29,8 +29,9 @@ final class Criteria
 
     /**
      * Ia [A] dla zabezpieczenia; null, gdy nie da się wyliczyć (brak In albo wkładki spoza tabeli).
+     * Wkładki gG w obwodach rozdzielczych (WLZ) i powyżej 63 A: czas wyłączenia 5 s (PN-HD 60364-4-41, sieć TN).
      */
-    public static function tripCurrent(?ProtectionType $type, ?float $ratedCurrent, float $disconnectionTime, ?float $override = null): ?float
+    public static function tripCurrent(?ProtectionType $type, ?float $ratedCurrent, float $disconnectionTime, ?float $override = null, bool $distribution = false): ?float
     {
         if ($override !== null && $override > 0) {
             return $override;
@@ -44,7 +45,8 @@ final class Criteria
             return $multiplier * $ratedCurrent;
         }
 
-        $table = self::GG_TRIP_CURRENTS[$disconnectionTime >= 5 ? 'ta5' : 'ta04'];
+        $long = $disconnectionTime >= 5 || $distribution || $ratedCurrent > 63;
+        $table = self::GG_TRIP_CURRENTS[$long ? 'ta5' : 'ta04'];
 
         return $table[(int) round($ratedCurrent)] ?? null;
     }

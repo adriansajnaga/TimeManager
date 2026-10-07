@@ -19,7 +19,7 @@ test('loop impedance values match the protocols: B16, C25 and gG fuses', functio
     // Wkładki gG z tabeli dla 0,4 s i 5 s; spoza tabeli — trzeba wpisać Ia ręcznie.
     expect(Criteria::tripCurrent(ProtectionType::GG, 25, 0.4))->toBe(180.0)
         ->and(Criteria::tripCurrent(ProtectionType::GG, 160, 5))->toBe(950.0)
-        ->and(Criteria::tripCurrent(ProtectionType::GG, 160, 0.4))->toBeNull()
+        ->and(Criteria::tripCurrent(ProtectionType::GG, 35, 0.4))->toBeNull()
         ->and(Criteria::tripCurrent(ProtectionType::GG, 160, 0.4, override: 1500))->toBe(1500.0);
 
     expect(Criteria::loopPasses(3.1, 2.875))->toBeFalse()
@@ -53,4 +53,13 @@ test('earthing uses the correction factor and continuity an optional limit', fun
         ->and(Criteria::earthingPasses(8.0, 1.3, 10))->toBeFalse()
         ->and(Criteria::continuityPasses(0.12, null))->toBeTrue()
         ->and(Criteria::continuityPasses(0.9, 0.5))->toBeFalse();
+});
+
+test('gG fuses above 63 A and in the supply line use the 5 s values', function () {
+    expect(Criteria::tripCurrent(ProtectionType::GG, 100, 0.4))->toBe(580.0)
+        ->and(Criteria::tripCurrent(ProtectionType::GG, 160, 0.4))->toBe(950.0)
+        ->and(Criteria::tripCurrent(ProtectionType::GG, 63, 0.4))->toBe(537.0)
+        ->and(Criteria::tripCurrent(ProtectionType::GG, 63, 0.4, distribution: true))->toBe(320.0)
+        ->and(Criteria::tripCurrent(ProtectionType::GG, 250, 0.4))->toBe(1650.0)
+        ->and(Criteria::tripCurrent(ProtectionType::B, 16, 0.4, distribution: true))->toBe(80.0);
 });
