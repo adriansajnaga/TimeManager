@@ -6,6 +6,7 @@ use App\Models\Attachment;
 use App\Models\CompanySetting;
 use App\Models\MeasurementBoard;
 use App\Models\MeasurementCircuit;
+use App\Models\MeasurementContinuity;
 use App\Models\MeasurementPerformer;
 use App\Models\MeasurementProtocol;
 use Illuminate\Support\Collection;
@@ -35,10 +36,15 @@ final class ReportRenderer
     {
         // Świeży odczyt: domyślne wartości kolumn (UL, ta) i aktualne wyniki.
         $protocol->refresh();
+        $protocol->syncContinuities();
         $protocol->load([
             'contractor', 'instrument.attachments', 'performers.attachments', 'inspections', 'attachments',
-            'boards.rcds', 'boards.circuits.points.marker', 'boards.circuits.rcd', 'markers.board', 'markers.points.circuit', 'earthings', 'continuities', 'cableTests',
+            'boards.rcds', 'boards.circuits.points.marker', 'boards.circuits.rcd', 'markers.board', 'markers.points.circuit', 'earthings', 'continuities.circuit.board.protocol', 'cableTests',
         ]);
+        // Ciągłość: wiersze obwodów tylko zmierzone (puste nie trafiają do protokołu), dopisane ręcznie — zawsze.
+        $protocol->setRelation('continuities', $protocol->continuities
+            ->filter(fn (MeasurementContinuity $row) => $row->circuit_id === null || $row->resistance !== null)
+            ->values());
 
         $data = $this->data($protocol);
 

@@ -188,6 +188,31 @@ class MeasurementProtocol extends Model implements Attachable
     }
 
     /**
+     * Wiersz ciągłości przewodu ochronnego dla każdego obwodu (także WLZ) — do uzupełnienia R.
+     * Wiersze dopisane ręcznie zostają na początku; nazwy wierszy obwodów idą za rozdzielnicą i obwodem.
+     */
+    public function syncContinuities(): void
+    {
+        $rows = $this->continuities()->whereNotNull('circuit_id')->get()->keyBy('circuit_id');
+        $position = (int) $this->continuities()->whereNull('circuit_id')->max('position');
+
+        foreach ($this->boards()->with('circuits')->get() as $board) {
+            foreach ($board->circuits as $circuit) {
+                $row = $rows->get($circuit->id) ?? new MeasurementContinuity(['circuit_id' => $circuit->id]);
+                $row->protocol_id = $this->id;
+                $row->fill([
+                    'position' => ++$position,
+                    'name' => mb_substr($board->name.' · '.trim($circuit->number.' '.$circuit->name), 0, 255),
+                ]);
+
+                if ($row->isDirty()) {
+                    $row->save();
+                }
+            }
+        }
+    }
+
+    /**
      * @return HasMany<MeasurementMarker, $this>
      */
     public function markers(): HasMany

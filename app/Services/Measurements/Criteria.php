@@ -19,7 +19,7 @@ final class Criteria
      */
     public const GG_TRIP_CURRENTS = [
         'ta04' => [2 => 15, 4 => 30, 6 => 46, 10 => 77, 16 => 110, 20 => 135, 25 => 180, 32 => 260, 40 => 327, 50 => 420, 63 => 537],
-        'ta5' => [2 => 9.2, 4 => 18.5, 6 => 28, 10 => 48, 16 => 65, 20 => 85, 25 => 110, 32 => 150, 40 => 190, 50 => 250, 63 => 320, 80 => 425, 100 => 580, 125 => 715, 160 => 950, 200 => 1250, 250 => 1650, 315 => 2200, 400 => 2840, 500 => 3800, 630 => 5100],
+        'ta5' => [2 => 9.2, 4 => 18.5, 6 => 28, 10 => 48, 16 => 65, 20 => 85, 25 => 110, 32 => 150, 35 => 173, 40 => 190, 50 => 250, 63 => 320, 80 => 425, 100 => 580, 125 => 715, 160 => 950, 200 => 1250, 250 => 1650, 315 => 2200, 400 => 2840, 500 => 3800, 630 => 5100],
     ];
 
     /** Czas zadziałania RCD przy 1×IΔn [ms]: bezzwłoczny ≤ 300, selektywny (S) 130–500. */
@@ -145,6 +145,12 @@ final class Criteria
     }
 
     /** Ciągłość: R ≤ wartość dopuszczalna (bez wartości dopuszczalnej — wystarczy pomiar). */
+    /** Dopuszczalna rezystancja przewodu ochronnego obwodu: R ≤ UL / Ia [Ω]. */
+    public static function continuityLimit(int $touchVoltage, ?float $tripCurrent): ?float
+    {
+        return $tripCurrent !== null && $tripCurrent > 0 ? $touchVoltage / $tripCurrent : null;
+    }
+
     public static function continuityPasses(?float $resistance, ?float $limit): ?bool
     {
         if ($resistance === null) {

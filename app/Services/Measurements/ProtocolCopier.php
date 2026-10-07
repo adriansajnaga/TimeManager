@@ -46,7 +46,8 @@ final class ProtocolCopier
             }
 
             $source->earthings()->get()->each(fn (MeasurementEarthing $row) => $copy->earthings()->create($row->only(['position', 'name', 'drawing', 'correction', 'limit'])));
-            $source->continuities()->get()->each(fn (MeasurementContinuity $row) => $copy->continuities()->create($row->only(['position', 'name', 'limit'])));
+            // Wiersze obwodów powstaną same (syncContinuities) — kopiujemy tylko dopisane ręcznie.
+            $source->continuities()->whereNull('circuit_id')->get()->each(fn (MeasurementContinuity $row) => $copy->continuities()->create($row->only(['position', 'name', 'limit'])));
             $source->cableTests()->get()->each(fn (MeasurementCableTest $row) => $copy->cableTests()->create($row->only(['position', 'name', 'cable_type', 'cross_section', 'length', 'test_voltage', 'limit'])));
 
             return $copy;

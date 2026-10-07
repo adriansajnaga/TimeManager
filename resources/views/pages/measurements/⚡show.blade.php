@@ -50,10 +50,14 @@ new class extends ComponentWithAttachments {
             'limit' => MeasurementInput::show($row->limit),
         ]])->all();
 
-        $this->continuities = $this->protocol->continuities()->get()->mapWithKeys(fn (MeasurementContinuity $row) => [$row->id => [
+        // Wiersz dla każdego obwodu (do uzupełnienia R) + pomiary dopisane ręcznie.
+        $this->protocol->syncContinuities();
+        $this->continuities = $this->protocol->continuities()->with('circuit.board.protocol')->get()->mapWithKeys(fn (MeasurementContinuity $row) => [$row->id => [
             'name' => $row->name,
             'resistance' => MeasurementInput::show($row->resistance),
             'limit' => MeasurementInput::show($row->limit),
+            'circuit' => $row->circuit_id !== null,
+            'auto_limit' => ($auto = $row->automaticLimit()) === null ? '' : MeasurementInput::show(round($auto, 2)),
         ]])->all();
 
         $this->cables = $this->protocol->cableTests()->get()->mapWithKeys(fn (MeasurementCableTest $row) => [$row->id => [
@@ -155,7 +159,10 @@ new class extends ComponentWithAttachments {
             default => [],
         };
 
-        $this->protocol->continuities()->whereKey((int) $id)->update($data);
+        // Nazwy wierszy obwodów idą za obwodem — zmienia się je w rozdzielnicy.
+        $this->protocol->continuities()->whereKey((int) $id)
+            ->when($field === 'name', fn ($query) => $query->whereNull('circuit_id'))
+            ->update($data);
     }
 
     public function addCable(): void
@@ -210,7 +217,7 @@ new class extends ComponentWithAttachments {
 
         match ($type) {
             'earthing' => $this->protocol->earthings()->whereKey($id)->delete(),
-            'continuity' => $this->protocol->continuities()->whereKey($id)->delete(),
+            'continuity' => $this->protocol->continuities()->whereKey($id)->whereNull('circuit_id')->delete(),
             'cable' => $this->protocol->cableTests()->whereKey($id)->delete(),
             default => null,
         };
@@ -351,11 +358,11 @@ new class extends ComponentWithAttachments {
         @foreach ($cables as $id => $cable)
             <div wire:key="cable-{{ $id }}" class="space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
                 <div class="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_7rem_6rem_5rem_5rem_6rem_auto]">
-                    <flux:input wire:model.blur="cables.{{ $id }}.name" size="sm" :label="__('Section')" class="col-span-2 sm:col-span-1" />
-                    <flux:input wire:model.blur="cables.{{ $id }}.cable_type" size="sm" :label="__('Cable')" placeholder="YKY" />
-                    <flux:input wire:model.blur="cables.{{ $id }}.cross_section" size="sm" :label="__('Cross-section')" placeholder="5x16" />
-                    <flux:input wire:model.blur="cables.{{ $id }}.length" size="sm" :label="__('l [m]')" inputmode="decimal" />
-                    <flux:input wire:model.blur="cables.{{ $id }}.temperature" size="sm" :label="__('t [°C]')" inputmode="decimal" />
+                    <flux:input wire:model.live.debounce.700ms="cables.{{ $id }}.name" size="sm" :label="__('Section')" class="col-span-2 sm:col-span-1" />
+                    <flux:input wire:model.live.debounce.700ms="cables.{{ $id }}.cable_type" size="sm" :label="__('Cable')" placeholder="YKY" />
+                    <flux:input wire:model.live.debounce.700ms="cables.{{ $id }}.cross_section" size="sm" :label="__('Cross-section')" placeholder="5x16" />
+                    <flux:input wire:model.live.debounce.700ms="cables.{{ $id }}.length" size="sm" :label="__('l [m]')" inputmode="decimal" />
+                    <flux:input wire:model.live.debounce.700ms="cables.{{ $id }}.temperature" size="sm" :label="__('t [°C]')" inputmode="decimal" />
                     <flux:select wire:model.live="cables.{{ $id }}.test_voltage" size="sm" :label="__('Uiso [V]')">
                         @foreach ([250, 500, 1000, 2500] as $voltage)
                             <flux:select.option :value="(string) $voltage">{{ $voltage }}</flux:select.option>
@@ -368,7 +375,7 @@ new class extends ComponentWithAttachments {
                 <div class="grid grid-cols-3 gap-2 sm:grid-cols-6">
                     @foreach (\App\Models\MeasurementCableTest::PAIRS as $pair)
                         @php($ok = Criteria::insulationPasses($cable['values'][$pair] ?? null, (float) str_replace(',', '.', $cable['limit'] ?: '1')))
-                        <flux:input wire:model.blur="cables.{{ $id }}.values.{{ $pair }}" size="sm" :label="$pair . ' [MΩ]'" placeholder=">1000"
+                        <flux:input wire:model.live.debounce.700ms="cables.{{ $id }}.values.{{ $pair }}" size="sm" :label="$pair . ' [MΩ]'" placeholder=">1000"
                             :class="$ok === false ? 'ring-2 ring-red-500 rounded-lg' : ''" />
                     @endforeach
                 </div>
@@ -388,11 +395,11 @@ new class extends ComponentWithAttachments {
             @php($kp = (float) (MeasurementInput::decimal($earthing['correction']) ?? 1))
             @php($ra = (float) (MeasurementInput::decimal($earthing['limit']) ?? 10))
             <div wire:key="earthing-{{ $id }}" class="grid grid-cols-2 items-end gap-2 sm:grid-cols-[1fr_5rem_6rem_5rem_5rem_6rem_auto]">
-                <flux:input wire:model.blur="earthings.{{ $id }}.name" size="sm" :label="__('Tested point')" class="col-span-2 sm:col-span-1" />
-                <flux:input wire:model.blur="earthings.{{ $id }}.drawing" size="sm" :label="__('Drawing')" />
-                <flux:input wire:model.blur="earthings.{{ $id }}.resistance" size="sm" :label="__('RE [Ω]')" inputmode="decimal" />
-                <flux:input wire:model.blur="earthings.{{ $id }}.correction" size="sm" :label="__('Kp')" inputmode="decimal" />
-                <flux:input wire:model.blur="earthings.{{ $id }}.limit" size="sm" :label="__('Ra [Ω]')" inputmode="decimal" />
+                <flux:input wire:model.live.debounce.700ms="earthings.{{ $id }}.name" size="sm" :label="__('Tested point')" class="col-span-2 sm:col-span-1" />
+                <flux:input wire:model.live.debounce.700ms="earthings.{{ $id }}.drawing" size="sm" :label="__('Drawing')" />
+                <flux:input wire:model.live.debounce.700ms="earthings.{{ $id }}.resistance" size="sm" :label="__('RE [Ω]')" inputmode="decimal" />
+                <flux:input wire:model.live.debounce.700ms="earthings.{{ $id }}.correction" size="sm" :label="__('Kp')" inputmode="decimal" />
+                <flux:input wire:model.live.debounce.700ms="earthings.{{ $id }}.limit" size="sm" :label="__('Ra [Ω]')" inputmode="decimal" />
                 <div class="pb-1 text-sm">
                     {{ $re !== null ? MeasurementInput::format((float) $re * $kp) . ' Ω' : '' }}
                     <x-measure-verdict :passes="Criteria::earthingPasses($re !== null ? (float) $re : null, $kp, $ra)" />
@@ -411,12 +418,24 @@ new class extends ComponentWithAttachments {
         @foreach ($continuities as $id => $continuity)
             @php($r = MeasurementInput::decimal($continuity['resistance']))
             @php($limit = MeasurementInput::decimal($continuity['limit']))
-            <div wire:key="continuity-{{ $id }}" class="grid grid-cols-2 items-end gap-2 sm:grid-cols-[1fr_6rem_6rem_6rem_auto]">
-                <flux:input wire:model.blur="continuities.{{ $id }}.name" size="sm" :label="__('Tested connection')" class="col-span-2 sm:col-span-1" />
-                <flux:input wire:model.blur="continuities.{{ $id }}.resistance" size="sm" :label="__('R [Ω]')" inputmode="decimal" />
-                <flux:input wire:model.blur="continuities.{{ $id }}.limit" size="sm" :label="__('Limit [Ω]')" inputmode="decimal" />
-                <div class="pb-1"><x-measure-verdict :passes="Criteria::continuityPasses($r !== null ? (float) $r : null, $limit !== null ? (float) $limit : null)" /></div>
-                <flux:button size="sm" variant="ghost" icon="trash" wire:click="deleteRow('continuity', {{ $id }})" wire:confirm="{{ __('Delete this row?') }}" :aria-label="__('Delete')" />
+            @php($autoLimit = MeasurementInput::decimal($continuity['auto_limit']))
+            @php($effectiveLimit = $limit ?? $autoLimit)
+            <div wire:key="continuity-{{ $id }}" class="grid grid-cols-2 items-end gap-2 sm:grid-cols-[1fr_6rem_6rem_6rem_2.25rem]">
+                @if ($continuity['circuit'])
+                    {{-- Wiersz obwodu: nazwa z rozdzielnicy, limit UL/Ia (można wpisać inny) --}}
+                    <flux:field class="col-span-2 sm:col-span-1">
+                        <flux:label>{{ __('Circuit') }}</flux:label>
+                        <div class="truncate py-1.5 text-sm">{{ $continuity['name'] }}</div>
+                    </flux:field>
+                @else
+                    <flux:input wire:model.live.debounce.700ms="continuities.{{ $id }}.name" size="sm" :label="__('Tested connection')" class="col-span-2 sm:col-span-1" />
+                @endif
+                <flux:input wire:model.live.debounce.700ms="continuities.{{ $id }}.resistance" size="sm" :label="__('R [Ω]')" inputmode="decimal" />
+                <flux:input wire:model.live.debounce.700ms="continuities.{{ $id }}.limit" size="sm" :label="__('Limit [Ω]')" inputmode="decimal" :placeholder="$continuity['auto_limit'] !== '' ? $continuity['auto_limit'] : null" />
+                <div class="pb-1"><x-measure-verdict :passes="Criteria::continuityPasses($r !== null ? (float) $r : null, $effectiveLimit !== null ? (float) $effectiveLimit : null)" /></div>
+                @unless ($continuity['circuit'])
+                    <flux:button size="sm" variant="ghost" icon="trash" wire:click="deleteRow('continuity', {{ $id }})" wire:confirm="{{ __('Delete this row?') }}" :aria-label="__('Delete')" />
+                @endunless
             </div>
         @endforeach
     </flux:card>

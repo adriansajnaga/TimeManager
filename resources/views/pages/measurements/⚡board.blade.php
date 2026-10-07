@@ -69,6 +69,9 @@ new class extends Component {
         ]])->all();
 
         $circuits = $this->board->circuits()->with('points')->get();
+        // Każdy obwód ma wiersz ciągłości przewodu ochronnego do uzupełnienia.
+        $this->protocol->syncContinuities();
+        $continuities = $this->protocol->continuities()->whereIn('circuit_id', $circuits->modelKeys())->pluck('resistance', 'circuit_id');
 
         $this->circuits = $circuits->mapWithKeys(fn (MeasurementCircuit $circuit) => [$circuit->id => [
             'number' => (string) $circuit->number,
@@ -81,6 +84,7 @@ new class extends Component {
             'rcd_id' => $circuit->rcd_id !== null ? (string) $circuit->rcd_id : '',
             'insulation_voltage' => (string) $circuit->insulation_voltage,
             'insulation' => array_map('strval', $circuit->insulation ?? []),
+            'continuity' => MeasurementInput::show($continuities[$circuit->id] ?? null),
         ]])->all();
 
         $this->points = $circuits->flatMap(fn (MeasurementCircuit $circuit) => $circuit->points)
@@ -216,7 +220,10 @@ new class extends Component {
             return;
         }
 
-        if ($parts[1] === 'insulation' && isset($parts[2]) && in_array($parts[2], $circuit->pairs(), true)) {
+        if ($parts[1] === 'continuity') {
+            $this->protocol->syncContinuities();
+            $this->protocol->continuities()->where('circuit_id', $circuit->id)->update(['resistance' => MeasurementInput::decimal($value)]);
+        } elseif ($parts[1] === 'insulation' && isset($parts[2]) && in_array($parts[2], $circuit->pairs(), true)) {
             $readings = $circuit->insulation ?? [];
             $readings[$parts[2]] = MeasurementInput::reading($value);
             $circuit->update(['insulation' => array_filter($readings, fn ($reading) => $reading !== null)]);
@@ -583,7 +590,7 @@ new class extends Component {
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="flex min-w-0 items-center gap-2">
             <flux:button variant="ghost" icon="arrow-left" :href="route('measurements.show', $protocol)" wire:navigate :aria-label="__('Back')" />
-            <flux:input wire:model.blur="boardName" class="max-w-40 font-semibold" />
+            <flux:input wire:model.live.debounce.700ms="boardName" class="max-w-40 font-semibold" />
             <flux:text class="truncate">{{ $protocol->number }} · {{ $protocol->place }}</flux:text>
         </div>
         <div class="flex items-center gap-3">
@@ -629,11 +636,11 @@ new class extends Component {
                     @if ($rcdOpen)
                         <div class="space-y-2 border-t border-zinc-200 p-3 dark:border-zinc-700">
                             <div class="grid grid-cols-3 gap-2">
-                                <flux:input wire:model.blur="rcds.{{ $rcd->id }}.trip_time" :label="__('t [ms]')" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
+                                <flux:input wire:model.live.debounce.700ms="rcds.{{ $rcd->id }}.trip_time" :label="__('t [ms]')" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
                                     :class="in_array('time', $failures ?? [], true) ? 'ring-2 ring-red-500 rounded-lg' : ''" />
-                                <flux:input wire:model.blur="rcds.{{ $rcd->id }}.trip_current" :label="__('Ia [mA]')" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
+                                <flux:input wire:model.live.debounce.700ms="rcds.{{ $rcd->id }}.trip_current" :label="__('Ia [mA]')" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
                                     :class="in_array('current', $failures ?? [], true) ? 'ring-2 ring-red-500 rounded-lg' : ''" />
-                                <flux:input wire:model.blur="rcds.{{ $rcd->id }}.contact_voltage" :label="__('Ud [V]')" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
+                                <flux:input wire:model.live.debounce.700ms="rcds.{{ $rcd->id }}.contact_voltage" :label="__('Ud [V]')" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
                                     :class="in_array('contact_voltage', $failures ?? [], true) ? 'ring-2 ring-red-500 rounded-lg' : ''" />
                             </div>
                             <div class="flex flex-wrap gap-4">
@@ -641,15 +648,15 @@ new class extends Component {
                                 <flux:checkbox wire:model.live="rcds.{{ $rcd->id }}.selective" :label="__('S (selective)')" />
                             </div>
                             <div class="grid grid-cols-3 gap-2 sm:grid-cols-[5rem_1fr_5rem_5rem_5rem]">
-                                <flux:input wire:model.blur="rcds.{{ $rcd->id }}.designation" size="sm" :label="__('Symbol')" />
-                                <flux:input wire:model.blur="rcds.{{ $rcd->id }}.model" size="sm" :label="__('Device')" placeholder="PXF 40/4/003-A" class="col-span-2 sm:col-span-1" />
+                                <flux:input wire:model.live.debounce.700ms="rcds.{{ $rcd->id }}.designation" size="sm" :label="__('Symbol')" />
+                                <flux:input wire:model.live.debounce.700ms="rcds.{{ $rcd->id }}.model" size="sm" :label="__('Device')" placeholder="PXF 40/4/003-A" class="col-span-2 sm:col-span-1" />
                                 <flux:select wire:model.live="rcds.{{ $rcd->id }}.type" size="sm" :label="__('Type')">
                                     @foreach (RcdType::cases() as $type)
                                         <flux:select.option :value="$type->value">{{ $type->value }}</flux:select.option>
                                     @endforeach
                                 </flux:select>
-                                <flux:input wire:model.blur="rcds.{{ $rcd->id }}.rated_current" size="sm" :label="__('In [A]')" inputmode="decimal" />
-                                <flux:input wire:model.blur="rcds.{{ $rcd->id }}.rated_residual" size="sm" :label="__('IΔn [mA]')" inputmode="numeric" />
+                                <flux:input wire:model.live.debounce.700ms="rcds.{{ $rcd->id }}.rated_current" size="sm" :label="__('In [A]')" inputmode="decimal" />
+                                <flux:input wire:model.live.debounce.700ms="rcds.{{ $rcd->id }}.rated_residual" size="sm" :label="__('IΔn [mA]')" inputmode="numeric" />
                             </div>
                             <div class="flex justify-end">
                                 <flux:button size="sm" variant="ghost" icon="trash" wire:click="deleteRcd({{ $rcd->id }})" wire:confirm="{{ __('Delete this RCD?') }}">{{ __('Delete') }}</flux:button>
@@ -687,9 +694,9 @@ new class extends Component {
                     <div class="space-y-4 border-t border-zinc-200 p-4 dark:border-zinc-700">
                         @unless ($board->isSupply())
                             <div class="grid grid-cols-2 gap-2 sm:grid-cols-[5rem_1fr_6rem_4.5rem]">
-                                <flux:input wire:model.blur="circuits.{{ $circuit->id }}.number" size="sm" :label="__('No.')" placeholder="2F4" />
-                                <flux:input wire:model.blur="circuits.{{ $circuit->id }}.name" size="sm" :label="__('Circuit / room')" />
-                                <flux:input wire:model.blur="circuits.{{ $circuit->id }}.cable" size="sm" :label="__('Cable')" placeholder="3x2,5" />
+                                <flux:input wire:model.live.debounce.700ms="circuits.{{ $circuit->id }}.number" size="sm" :label="__('No.')" placeholder="2F4" />
+                                <flux:input wire:model.live.debounce.700ms="circuits.{{ $circuit->id }}.name" size="sm" :label="__('Circuit / room')" />
+                                <flux:input wire:model.live.debounce.700ms="circuits.{{ $circuit->id }}.cable" size="sm" :label="__('Cable')" placeholder="3x2,5" />
                                 <flux:select wire:model.live="circuits.{{ $circuit->id }}.phases" size="sm" :label="__('Phases')">
                                     <flux:select.option value="1">1F</flux:select.option>
                                     <flux:select.option value="3">3F</flux:select.option>
@@ -706,7 +713,7 @@ new class extends Component {
                                 @endforeach
                             </div>
                             <div class="grid grid-cols-3 gap-2">
-                                <flux:input wire:model.blur="circuits.{{ $circuit->id }}.protection_current" size="sm" :label="__('In [A]')" inputmode="decimal" list="in-values" />
+                                <flux:input wire:model.live.debounce.700ms="circuits.{{ $circuit->id }}.protection_current" size="sm" :label="__('In [A]')" inputmode="decimal" list="in-values" />
                                 <flux:input wire:model.blur="circuits.{{ $circuit->id }}.trip_current_override" size="sm" :label="__('Ia [A]')" inputmode="decimal"
                                     :description="$circuit->trip_current_override !== null ? __('entered manually — clear to calculate') : null" />
                                 @unless ($board->isSupply())
@@ -747,20 +754,20 @@ new class extends Component {
                                         @if ($board->isSupply())
                                             <span class="font-medium">{{ $point->symbol }}</span>
                                         @else
-                                            <flux:input wire:model.blur="points.{{ $point->id }}.symbol" size="sm" class:input="px-1.5 text-center" />
+                                            <flux:input wire:model.live.debounce.700ms="points.{{ $point->id }}.symbol" size="sm" class:input="px-1.5 text-center" />
                                         @endif
-                                        <flux:input wire:model.blur="points.{{ $point->id }}.impedance" class:input="px-1.5 text-center" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
+                                        <flux:input wire:model.live.debounce.700ms="points.{{ $point->id }}.impedance" class:input="px-1.5 text-center" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
                                             :class="$ok === false ? 'ring-2 ring-red-500 rounded-lg' : ($ok === true ? 'ring-1 ring-green-500/60 rounded-lg' : '')" />
                                         <span class="text-end text-sm tabular-nums text-zinc-500">{{ $point->isLineToLine() ? '–' : $fmt($point->shortCircuitCurrent($protocol), 0) }}</span>
                                         @if ($withNpe && ! $board->isSupply())
-                                            <flux:input wire:model.blur="points.{{ $point->id }}.impedance_npe" class:input="px-1.5 text-center" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
+                                            <flux:input wire:model.live.debounce.700ms="points.{{ $point->id }}.impedance_npe" class:input="px-1.5 text-center" inputmode="decimal" data-measure x-on:keydown.enter.prevent="next($event)"
                                                 :class="$okNpe === false ? 'ring-2 ring-red-500 rounded-lg' : ''" />
                                             <span class="text-end text-sm tabular-nums text-zinc-500">{{ $fmt($point->shortCircuitCurrent($protocol, npe: true), 0) }}</span>
                                         @endif
                                     </div>
                                     @unless ($board->isSupply())
                                         <div class="flex items-center gap-2">
-                                            <input type="text" wire:model.blur="points.{{ $point->id }}.location"
+                                            <input type="text" wire:model.live.debounce.700ms="points.{{ $point->id }}.location"
                                                 class="mt-0.5 min-w-0 flex-1 border-0 bg-transparent p-0 text-xs text-zinc-500 focus:ring-0" />
                                             <flux:button size="xs" :variant="$point->marker ? 'filled' : 'ghost'" icon="map-pin" wire:click="openPlan({{ $point->id }})" :aria-label="__('Mark on the plan')">{{ $point->marker?->number }}</flux:button>
                                             <flux:button size="xs" variant="ghost" icon="x-mark" wire:click="deletePoint({{ $point->id }})" :aria-label="__('Delete')" />
@@ -768,6 +775,16 @@ new class extends Component {
                                     @endunless
                                 </div>
                             @endforeach
+                        </div>
+
+                        {{-- Ciągłość przewodu ochronnego obwodu: R ≤ UL / Ia (wiersz w tabeli ciągłości protokołu) --}}
+                        @php($continuityLimit = Criteria::continuityLimit($protocol->touch_voltage, $ia))
+                        @php($continuityR = MeasurementInput::decimal($circuits[$circuit->id]['continuity'] ?? ''))
+                        <div class="flex flex-wrap items-end gap-2">
+                            <flux:input wire:model.live.debounce.700ms="circuits.{{ $circuit->id }}.continuity" size="sm" class="w-36" inputmode="decimal"
+                                :label="__('PE continuity R [Ω]')" />
+                            <flux:text class="pb-2 text-sm">≤ {{ $fmt($continuityLimit, 2) }} Ω</flux:text>
+                            <div class="pb-1"><x-measure-verdict :passes="Criteria::continuityPasses($continuityR !== null ? (float) $continuityR : null, $continuityLimit)" /></div>
                         </div>
 
                         @unless ($board->isSupply())
@@ -794,7 +811,7 @@ new class extends Component {
                                 <div class="grid grid-cols-3 gap-2 sm:grid-cols-5">
                                     @foreach ($circuit->pairs() as $pair)
                                         @php($pairOk = Criteria::insulationPasses($circuits[$circuit->id]['insulation'][$pair] ?? null, Criteria::requiredInsulation($circuit->insulation_voltage)))
-                                        <flux:input wire:model.blur="circuits.{{ $circuit->id }}.insulation.{{ $pair }}" size="sm" :label="$pair" placeholder=">30"
+                                        <flux:input wire:model.live.debounce.700ms="circuits.{{ $circuit->id }}.insulation.{{ $pair }}" size="sm" :label="$pair" placeholder=">30"
                                             :class="$pairOk === false ? 'ring-2 ring-red-500 rounded-lg' : ''" />
                                     @endforeach
                                 </div>
@@ -926,7 +943,7 @@ new class extends Component {
     </flux:modal>
 
     <datalist id="in-values">
-        @foreach ([6, 10, 13, 16, 20, 25, 32, 40, 50, 63, 80, 100, 125, 160] as $value)
+        @foreach ([6, 10, 13, 16, 20, 25, 32, 35, 40, 50, 63, 80, 100, 125, 160] as $value)
             <option value="{{ $value }}"></option>
         @endforeach
     </datalist>

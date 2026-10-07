@@ -330,7 +330,7 @@
                 <td>{{ $index + 1 }}</td>
                 <td class="left">{{ $row->name }}</td>
                 <td>{{ $raw($row->resistance) }}</td>
-                <td>{{ $raw($row->limit) ?: '–' }}</td>
+                <td>{{ ($limitValue = $row->limitValue()) === null ? '–' : number_format($limitValue, 2, ',', '') }}</td>
                 <td class="{{ $passes === false ? 'neg' : '' }}">{{ $verdict($passes) }}</td>
             </tr>
         @endforeach
@@ -339,6 +339,7 @@
         'Lp' => 'Liczba porządkowa',
         'Badane połączenie' => 'Przewód ochronny lub połączenie wyrównawcze',
         'R' => 'Zmierzona rezystancja',
+        'Wartość dopuszczalna' => 'Dla obwodów R ≤ UL / Ia',
     ]) !!}
     {!! $result($continuityNegative) !!}
 @endif
