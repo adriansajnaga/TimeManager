@@ -22,10 +22,8 @@ class BoardLegendController extends Controller
     /** Szerokość modułu w mm (skala 1:1). */
     private const MODULE = 18;
 
-    /** Szerokość druku A4 w mm przy marginesach 12 mm: pionowo i poziomo. */
-    private const PORTRAIT_WIDTH = 186;
-
-    private const LANDSCAPE_WIDTH = 273;
+    /** Szerokość druku A4 pionowo w mm przy marginesach 12 mm. */
+    private const PRINT_WIDTH = 186;
 
     public function __invoke(MeasurementProtocol $protocol, MeasurementBoard $board): Response
     {
@@ -34,23 +32,21 @@ class BoardLegendController extends Controller
         $layout = BoardLayout::for($board);
         $rail = $layout->toArray()['rail'];
 
-        // Moduł 18 mm (1:1): pionowo, gdy szyna się mieści; inaczej poziomo, a gdy i tak za szeroka — pomniejszona.
-        $landscape = $rail * self::MODULE > self::PORTRAIT_WIDTH;
-        $module = min(self::MODULE, ($landscape ? self::LANDSCAPE_WIDTH : self::PORTRAIT_WIDTH) / max(1, $rail));
+        // A4 pionowo: moduł 18 mm (1:1), gdy szyna się mieści; szersza szyna pomniejszona do szerokości strony.
+        $module = min(self::MODULE, self::PRINT_WIDTH / max(1, $rail));
         $tempDir = storage_path('app/mpdf');
         File::ensureDirectoryExists($tempDir);
 
         $mpdf = new Mpdf([
             'mode' => 'utf-8',
             'format' => 'A4',
-            'orientation' => $landscape ? 'L' : 'P',
             'tempDir' => $tempDir,
             'default_font' => 'dejavusanscondensed',
             'margin_left' => 12,
             'margin_right' => 12,
             'margin_top' => 10,
             'margin_bottom' => 10,
-            // Skala 1:1 — szyn nie pomniejszamy; szyna, która się nie mieści, przechodzi na następną stronę.
+            // Rozmiar szyn liczymy sami (moduł w mm) — mPDF ich nie pomniejsza; szyna, która się nie mieści, przechodzi na następną stronę.
             'shrink_tables_to_fit' => 0,
         ]);
         $mpdf->SetTitle('Rozdzielnica '.$board->name);
