@@ -9,7 +9,7 @@ use App\Models\WorkWeek;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Co widzi klient: projekty swojej firmy i godziny z części tygodni zamkniętych dla niej (zatwierdzonych).
+ * Co widzi klient: projekty swojej firmy, ich godziny (zatwierdzone i w trakcie) i Montageaufträge zatwierdzonych tygodni.
  * Bez stawek, kwot i faktur.
  */
 final class ClientPortal
@@ -37,7 +37,7 @@ final class ClientPortal
     }
 
     /**
-     * Zatwierdzone godziny: wpisy z części tygodni zamkniętych dla firmy klienta.
+     * Wszystkie godziny projektów firmy klienta — zatwierdzone i jeszcze nierozliczone.
      *
      * @return Builder<TimeEntry>
      */
@@ -46,8 +46,17 @@ final class ClientPortal
         $contractorId = $this->contractorId();
 
         return TimeEntry::query()
-            ->whereHas('project', fn (Builder $projects) => $projects->where('contractor_id', $contractorId))
-            ->whereIn('work_week_id', WorkWeek::query()->closedFor($contractorId)->select('id'));
+            ->whereHas('project', fn (Builder $projects) => $projects->where('contractor_id', $contractorId));
+    }
+
+    /**
+     * Zatwierdzone godziny: wpisy z części tygodni zamkniętych dla firmy klienta.
+     *
+     * @return Builder<TimeEntry>
+     */
+    public function approvedEntries(): Builder
+    {
+        return $this->entries()->whereIn('work_week_id', WorkWeek::query()->closedFor($this->contractorId())->select('id'));
     }
 
     public function weekIsVisible(WorkWeek $week): bool

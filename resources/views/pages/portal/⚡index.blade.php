@@ -2,6 +2,8 @@
 
 use App\Models\Project;
 use App\Services\ClientPortal;
+use App\Support\Hours;
+use Brick\Math\BigDecimal;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -21,7 +23,7 @@ new #[Title('My projects')] class extends Component {
     }
 
     /**
-     * Projekty firmy klienta z sumą zatwierdzonych godzin; z godzinami na górze, najnowsze najpierw.
+     * Projekty firmy klienta z sumą godzin (wszystkich i zatwierdzonych); z godzinami na górze, najnowsze najpierw.
      *
      * @return LengthAwarePaginator<int, Project>
      */
@@ -29,12 +31,13 @@ new #[Title('My projects')] class extends Component {
     public function projects(): LengthAwarePaginator
     {
         $portal = new ClientPortal(auth()->user());
-        $entries = $portal->entries();
+        $approved = $portal->approvedEntries();
         $search = trim($this->search);
 
         return $portal->projects()
-            ->withSum(['timeEntries as approved_hours' => fn ($query) => $query->whereIn('id', (clone $entries)->select('time_entries.id'))], 'hours')
-            ->withMax(['timeEntries as last_day' => fn ($query) => $query->whereIn('id', (clone $entries)->select('time_entries.id'))], 'work_date')
+            ->withSum('timeEntries as total_hours', 'hours')
+            ->withSum(['timeEntries as approved_hours' => fn ($query) => $query->whereIn('id', $approved->select('time_entries.id'))], 'hours')
+            ->withMax('timeEntries as last_day', 'work_date')
             ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query
                 ->where('number', 'like', '%'.$search.'%')
                 ->orWhere('name', 'like', '%'.$search.'%')
@@ -50,7 +53,7 @@ new #[Title('My projects')] class extends Component {
 <section class="w-full space-y-6">
     <div>
         <flux:heading size="xl" level="1">{{ __('My projects') }}</flux:heading>
-        <flux:subheading>{{ auth()->user()->contractor?->name }} · {{ __('Approved working hours and weekly reports.') }}</flux:subheading>
+        <flux:subheading>{{ auth()->user()->contractor?->name }} · {{ __('Working hours and weekly reports.') }}</flux:subheading>
     </div>
 
     <flux:input wire:model.live.debounce.300ms="search" icon="magnifying-glass" :placeholder="__('Search by number, name or place')" class="max-w-sm" />
@@ -61,7 +64,8 @@ new #[Title('My projects')] class extends Component {
             <flux:table.column>{{ __('Project') }}</flux:table.column>
             <flux:table.column>{{ __('Place') }}</flux:table.column>
             <flux:table.column>{{ __('Last working day') }}</flux:table.column>
-            <flux:table.column align="end">{{ __('Hours') }}</flux:table.column>
+            <flux:table.column align="end">{{ __('Approved') }}</flux:table.column>
+            <flux:table.column align="end">{{ __('In progress') }}</flux:table.column>
         </flux:table.columns>
         <flux:table.rows>
             @forelse ($this->projects as $project)
@@ -72,11 +76,13 @@ new #[Title('My projects')] class extends Component {
                     <flux:table.cell class="max-w-72 truncate">{{ $project->name }}</flux:table.cell>
                     <flux:table.cell>{{ collect([$project->site_name, $project->site_city])->filter()->implode(', ') ?: '—' }}</flux:table.cell>
                     <flux:table.cell>{{ $project->last_day ? \Carbon\CarbonImmutable::parse($project->last_day)->format('d.m.Y') : '—' }}</flux:table.cell>
-                    <flux:table.cell align="end" class="tabular-nums">{{ \App\Support\Hours::format((string) ($project->approved_hours ?? 0)) }}</flux:table.cell>
+                    @php($openHours = BigDecimal::of($project->total_hours ?? 0)->minus($project->approved_hours ?? 0))
+                    <flux:table.cell align="end" class="tabular-nums">{{ Hours::format((string) ($project->approved_hours ?? 0)) }}</flux:table.cell>
+                    <flux:table.cell align="end" class="tabular-nums {{ $openHours->isPositive() ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-400' }}">{{ Hours::format((string) $openHours) }}</flux:table.cell>
                 </flux:table.row>
             @empty
                 <flux:table.row>
-                    <flux:table.cell colspan="5" class="text-center">{{ __('No projects found.') }}</flux:table.cell>
+                    <flux:table.cell colspan="6" class="text-center">{{ __('No projects found.') }}</flux:table.cell>
                 </flux:table.row>
             @endforelse
         </flux:table.rows>

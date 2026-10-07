@@ -22,13 +22,14 @@ beforeEach(function () {
     $approved->workWeek->closeFor($this->gaertner, $this->admin);
     $this->closedWeek = $approved->workWeek;
 
-    $draft = TimeEntry::factory()->for($this->worker)->for($this->project)->create(['work_date' => '2026-09-14', 'start_time' => '06:00', 'end_time' => '09:00', 'break_minutes' => 0]);
+    $draft = TimeEntry::factory()->for($this->worker)->for($this->project)->create(['work_date' => '2026-09-14', 'start_time' => '06:00', 'end_time' => '09:00', 'break_minutes' => 0, 'description' => 'Trasy kablowe']);
+    WeeklyReport::query()->create(['work_week_id' => $draft->work_week_id, 'project_id' => $this->project->id, 'performed_work' => 'Entwurf, noch offen.']);
     $this->openWeek = $draft->workWeek;
 
     $this->client = User::factory()->create(['role' => Role::Client, 'contractor_id' => $this->gaertner->id]);
 });
 
-test('the client sees only approved hours of their own projects, without amounts', function () {
+test('the client sees the hours of their own projects week by week, without amounts', function () {
     $this->actingAs($this->client)->get(route('dashboard'))->assertRedirect(route('portal.index'));
 
     $this->get(route('portal.index'))->assertOk()
@@ -37,8 +38,9 @@ test('the client sees only approved hours of their own projects, without amounts
 
     $this->get(route('portal.project', $this->project))->assertOk()
         ->assertSee('Jan Monter')
-        ->assertSee('8')
-        ->assertDontSee('14.09.2026');
+        ->assertSee('Kabel verlegt.')
+        ->assertSee('14.09.2026')->assertSee('Trasy kablowe')->assertSee(__('In progress — not yet approved'))
+        ->assertDontSee('Entwurf, noch offen.');
 
     $this->get(route('portal.project', $this->foreign))->assertNotFound();
 
