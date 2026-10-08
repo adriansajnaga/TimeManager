@@ -6,8 +6,8 @@
 @if ($hasRcd)
     <pagebreak />
     <div class="criteria">
-        <h2>Warunki przeprowadzenia prób i pomiarów oraz kryteria oceny</h2>
-        <h3>badanie urządzeń różnicowoprądowych</h3>
+        <h2 class="crit-title">Warunki przeprowadzenia prób i pomiarów oraz kryteria oceny</h2>
+        <h3 class="crit-topic">badanie urządzeń różnicowoprądowych</h3>
         <p>{{ $intro }}</p>
         <p>Ocenę sprawności urządzeń ochronnych różnicowoprądowych (wyłączników różnicowoprądowych) przeprowadzono zgodnie z wymogami ujętymi w normie PN-HD 60364-6:2016-07.</p>
         <table class="grid" style="width: 70%; margin: 2mm auto;">
@@ -25,8 +25,8 @@
 @if ($hasPoints || $hasSupply)
     <pagebreak />
     <div class="criteria">
-        <h2>Warunki przeprowadzenia prób i pomiarów oraz kryteria oceny</h2>
-        <h3>badanie impedancji pętli zwarcia</h3>
+        <h2 class="crit-title">Warunki przeprowadzenia prób i pomiarów oraz kryteria oceny</h2>
+        <h3 class="crit-topic">badanie impedancji pętli zwarcia</h3>
         <p>{{ $intro }}</p>
         <p>Próby i pomiary parametrów technicznych badanej instalacji elektrycznej zostały wykonane w warunkach zbliżonych do warunków jej normalnej pracy, zgodnie z postanowieniami normy PN-HD 60364-4-41:2017-09.</p>
         <p><b>1 – dla układu sieci TN</b>, zgodnie z postanowieniami punktu 411.4.4 normy PN-HD 60364-4-41:</p>
@@ -40,8 +40,8 @@
 @if ($protocol->earthings->isNotEmpty())
     <pagebreak />
     <div class="criteria">
-        <h2>Warunki przeprowadzenia prób i pomiarów oraz kryteria oceny</h2>
-        <h3>badanie rezystancji uziemienia</h3>
+        <h2 class="crit-title">Warunki przeprowadzenia prób i pomiarów oraz kryteria oceny</h2>
+        <h3 class="crit-topic">badanie rezystancji uziemienia</h3>
         <p>Pomiar rezystancji uziemienia przeprowadzono zgodnie z zaleceniami normy PN-HD 60364-6:2016-07, załącznik C, przyrządem zgodnym co do metody opisanej w przywołanej normie, w świetle wymagań stawianych przez PN-HD 60364-5-54:2011.</p>
         <p>Wynik spełnia wymagania, gdy rezystancja zmierzona po uwzględnieniu współczynnika korekcyjnego nie przekracza wartości wymaganej:</p>
         <p class="formula">RE · Kp ≤ Ra</p>
@@ -51,8 +51,8 @@
 @if ($protocol->continuities->isNotEmpty())
     <pagebreak />
     <div class="criteria">
-        <h2>Warunki przeprowadzenia prób i pomiarów oraz kryteria oceny</h2>
-        <h3>badanie ciągłości przewodów ochronnych</h3>
+        <h2 class="crit-title">Warunki przeprowadzenia prób i pomiarów oraz kryteria oceny</h2>
+        <h3 class="crit-topic">badanie ciągłości przewodów ochronnych</h3>
         <p>{{ $intro }}</p>
         <p>Próby i pomiary zostały wykonane w warunkach zbliżonych do warunków normalnej pracy instalacji, zgodnie z postanowieniami rozdziału 6.4.3.2 normy PN-HD 60364-6:2016-07. Wykonano próbę ciągłości elektrycznej: a) przewodów ochronnych, w tym przewodów ochronnych w połączeniach wyrównawczych, b) części czynnych dostępnych, c) przewodów czynnych w obwodach pierścieniowych.</p>
         <p>Próby przeprowadzono miernikiem wykorzystującym prąd stały lub przemienny o napięciu od 4 V do 24 V, prądem co najmniej 0,2 A. Błąd pomiarowy nie może przekraczać 30% w zakresie od 0,2 Ω do 2 Ω.</p>
@@ -62,8 +62,8 @@
 @if ($hasInsulation || $protocol->cableTests->isNotEmpty())
     <pagebreak />
     <div class="criteria">
-        <h2>Warunki przeprowadzenia prób i pomiarów oraz kryteria oceny</h2>
-        <h3>badanie rezystancji izolacji</h3>
+        <h2 class="crit-title">Warunki przeprowadzenia prób i pomiarów oraz kryteria oceny</h2>
+        <h3 class="crit-topic">badanie rezystancji izolacji</h3>
         <p>{{ $intro }}</p>
         <p>Próby i pomiary zostały wykonane w warunkach zbliżonych do warunków normalnej pracy instalacji, zgodnie z postanowieniami rozdziału 6.4.3.3 normy PN-HD 60364-6:2016-07.</p>
         <p class="formula">Rs ≥ Ra</p>

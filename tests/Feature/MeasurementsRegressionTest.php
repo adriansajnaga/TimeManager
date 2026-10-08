@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\ProtectionType;
+use App\Models\MeasurementMarker;
 use App\Models\MeasurementProtocol;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
@@ -105,6 +106,37 @@ test('plan symbols keep the protocol size and can be rotated, also in the report
     expect((float) $protocol->refresh()->marker_size)->toBe(6.0)
         ->and($socket->refresh()->marker->rotation)->toBe(180)
         ->and($socket->marker->kind())->toBe('socket');
+
+    $this->actingAs($this->admin)->get(route('measurements.report', $protocol))->assertOk();
+});
+
+test('single-phase circuits report insulation under their phase, the bonding bar stays on the plan, empty continuity is left out', function () {
+    $protocol = MeasurementProtocol::query()->create([...MeasurementProtocol::nextNumber(now()), 'place' => 'Toruń', 'measured_on' => now()->toDateString()]);
+    $protocol->refresh();
+    $protocol->continuities()->create(['position' => 1, 'name' => 'GSW – rura wodna']);
+    $board = $protocol->boards()->create(['position' => 1, 'name' => 'R1']);
+    $circuit = $board->circuits()->create(['position' => 1, 'number' => '1F1', 'name' => 'Salon', 'protection_type' => ProtectionType::B, 'protection_current' => 16, 'insulation' => ['L-N' => '>30', 'L-PE' => '>30']]);
+    $socket = $circuit->points()->create(['position' => 1, 'symbol' => 'G1']);
+
+    Livewire::actingAs($this->admin)->test('pages::measurements.board', ['protocol' => $protocol, 'board' => $board])
+        ->set("circuits.{$circuit->id}.phase", 'L2');
+
+    $circuit->refresh();
+    expect($circuit->phase)->toBe('L2')
+        ->and($circuit->pairLabel('L-PE'))->toBe('L2-PE')
+        ->and($circuit->reportReadings())->toBe(['L2-N' => '>30', 'L2-PE' => '>30']);
+
+    Livewire::actingAs($this->admin)->test('pages::measurements.show', ['protocol' => $protocol])
+        ->set('uploads', [UploadedFile::fake()->image('rzut.png', 800, 600)]);
+
+    Livewire::actingAs($this->admin)->test('pages::measurements.board', ['protocol' => $protocol, 'board' => $board])
+        ->call('openBondingPlan')->call('placeBondingMarker', 10, 90)
+        ->call('openPlan', $socket->id)->call('placeMarker', 50, 50)
+        ->call('openPlan', $socket->id)->call('unassignPoint');
+
+    // GSW nie znika przy sprzątaniu pustych znaczników punktów.
+    expect($protocol->markers()->where('type', 'bonding')->count())->toBe(1)
+        ->and(MeasurementMarker::legendItems($protocol->markers()->get()))->toBe(['bonding']);
 
     $this->actingAs($this->admin)->get(route('measurements.report', $protocol))->assertOk();
 });

@@ -4,7 +4,7 @@
     h2 { font-size: 11pt; text-align: center; margin: 0 0 1mm; }
     h3 { font-size: 9pt; text-align: center; font-weight: normal; margin: 0 0 3mm; }
     /* Strona tytułowa: etykiety do prawej, wartości pogrubione, większe jak w dotychczasowym wzorze */
-    .title-meta td { font-size: 12pt; padding: 2.4mm 2mm; color: #000; }
+    .title-meta td { font-size: 11.5pt; padding: 1.3mm 2mm; color: #000; }
     .title-meta td.label { width: 58mm; color: #000; }
     .meta td { padding: 1.2mm 2mm; vertical-align: top; font-size: 10pt; }
     .meta td.label { width: 42mm; text-align: right; color: #333; }
@@ -20,6 +20,9 @@
     .result.neg { color: #c00; }
     .legend td { font-size: 7pt; padding: 0.3mm 2mm; vertical-align: top; }
     .criteria p { margin: 0 0 2mm; text-align: justify; }
+    /* Strona kryteriów: ogólny nagłówek mniejszy i zwykły, temat badania większy i pogrubiony */
+    h2.crit-title { font-size: 9.5pt; font-weight: normal; }
+    h3.crit-topic { font-size: 12pt; font-weight: bold; margin: 1mm 0 4mm; }
     .formula { text-align: center; font-weight: bold; margin: 2mm 0; }
     .muted { color: #555; }
     .small { font-size: 7pt; }

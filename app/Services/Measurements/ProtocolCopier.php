@@ -68,7 +68,7 @@ final class ProtocolCopier
         foreach ($board->circuits as $circuit) {
             /** @var MeasurementCircuit $circuit */
             $newCircuit = $newBoard->circuits()->create([
-                ...$circuit->only(['position', 'number', 'name', 'phases', 'protection_type', 'protection_current', 'trip_current_override', 'cable', 'insulation_voltage']),
+                ...$circuit->only(['position', 'number', 'name', 'phases', 'phase', 'protection_type', 'protection_current', 'trip_current_override', 'cable', 'insulation_voltage']),
                 'rcd_id' => $circuit->rcd_id !== null ? ($rcdIds[$circuit->rcd_id] ?? null) : null,
             ]);
 

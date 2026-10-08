@@ -7,9 +7,11 @@ use App\Models\CompanySetting;
 use App\Models\MeasurementBoard;
 use App\Models\MeasurementCircuit;
 use App\Models\MeasurementContinuity;
+use App\Models\MeasurementMarker;
 use App\Models\MeasurementPerformer;
 use App\Models\MeasurementProtocol;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Mpdf\HTMLParserMode;
@@ -41,9 +43,9 @@ final class ReportRenderer
             'contractor', 'instrument.attachments', 'performers.attachments', 'inspections', 'attachments',
             'boards.rcds', 'boards.circuits.points.marker', 'boards.circuits.rcd', 'markers.board', 'markers.points.circuit', 'earthings', 'continuities.circuit.board.protocol', 'cableTests',
         ]);
-        // Ciągłość: wiersze obwodów tylko zmierzone (puste nie trafiają do protokołu), dopisane ręcznie — zawsze.
+        // Ciągłość: tylko zmierzone wiersze — bez wyników strona ciągłości (i jej kryteria) nie powstaje.
         $protocol->setRelation('continuities', $protocol->continuities
-            ->filter(fn (MeasurementContinuity $row) => $row->circuit_id === null || $row->resistance !== null)
+            ->filter(fn (MeasurementContinuity $row) => $row->resistance !== null)
             ->values());
 
         $data = $this->data($protocol);
@@ -220,7 +222,16 @@ final class ReportRenderer
             }
 
             $mpdf->AddPageByArray(['margin-top' => 40]);
-            $mpdf->WriteHTML(view('pdf.measurements.image', ['title' => $title, 'caption' => $caption, 'path' => $path])->render(), HTMLParserMode::HTML_BODY);
+            $mpdf->WriteHTML(view('pdf.measurements.image', [
+                'title' => $title,
+                'caption' => $caption,
+                'path' => $path,
+                'legend' => MeasurementMarker::legendItems($markers),
+                // Symbole legendy jako SVG — ten sam komponent co na ekranie.
+                'symbols' => collect(array_keys(MeasurementMarker::LEGEND))->mapWithKeys(fn (string $kind) => [
+                    $kind => 'data:image/svg+xml;base64,'.base64_encode(Blade::render('<x-plan-symbol :kind="$kind" />', ['kind' => $kind])),
+                ])->all(),
+            ])->render(), HTMLParserMode::HTML_BODY);
 
             return;
         }

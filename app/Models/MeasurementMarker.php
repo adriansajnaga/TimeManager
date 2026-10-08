@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $protocol_id
  * @property int $attachment_id
  * @property int|null $board_id Znacznik rozdzielnicy (prostokąt z nazwą) zamiast punktu
+ * @property string|null $type 'bonding' — główna szyna wyrównawcza (GSW)
  * @property int $number
  * @property string $x Pozycja w % szerokości obrazu
  * @property string $y Pozycja w % wysokości obrazu
@@ -22,7 +23,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read Attachment $attachment
  * @property-read MeasurementBoard|null $board
  */
-#[Fillable(['attachment_id', 'board_id', 'number', 'x', 'y', 'rotation'])]
+#[Fillable(['attachment_id', 'board_id', 'type', 'number', 'x', 'y', 'rotation'])]
 class MeasurementMarker extends Model
 {
     /** Kolejny numer znacznika w protokole. */
@@ -49,9 +50,25 @@ class MeasurementMarker extends Model
         return $this->belongsTo(Attachment::class);
     }
 
+    public const TYPE_BONDING = 'bonding';
+
+    /** Kolor GSW na rzucie (żółto-zielony przewód ochronny — tu zielony, czytelny na rysunku). */
+    public const BONDING_COLOR = '#15803d';
+
     public function isBoard(): bool
     {
         return $this->board_id !== null;
+    }
+
+    public function isBonding(): bool
+    {
+        return $this->type === self::TYPE_BONDING;
+    }
+
+    /** Znacznik punktów pomiarowych (nie rozdzielnica ani GSW). */
+    public function isPoint(): bool
+    {
+        return ! $this->isBoard() && ! $this->isBonding();
     }
 
     /**
@@ -60,6 +77,33 @@ class MeasurementMarker extends Model
     public function board(): BelongsTo
     {
         return $this->belongsTo(MeasurementBoard::class, 'board_id');
+    }
+
+    /** Opisy symboli w legendzie rzutu (klucze tłumaczeń; w PDF zawsze po polsku). */
+    public const LEGEND = [
+        'socket' => 'Single-phase socket outlet',
+        'socket3' => 'Three-phase socket outlet',
+        'light' => 'Lighting point',
+        'point' => 'Other measuring point',
+    ];
+
+    /**
+     * Pozycje legendy dla znaczników jednego rzutu: rodzaje punktów, które na nim są, rozdzielnica i GSW.
+     *
+     * @param  iterable<MeasurementMarker>  $markers
+     * @return list<string> klucze LEGEND oraz 'board' / 'bonding'
+     */
+    public static function legendItems(iterable $markers): array
+    {
+        $items = [];
+
+        foreach ($markers as $marker) {
+            $items[] = $marker->isBoard() ? 'board' : ($marker->isBonding() ? 'bonding' : $marker->kind());
+        }
+
+        $order = [...array_keys(self::LEGEND), 'board', 'bonding'];
+
+        return array_values(array_filter($order, fn (string $item) => in_array($item, $items, true)));
     }
 
     /** Kolory symboli na rzucie — czerwona jest tylko rozdzielnica. */

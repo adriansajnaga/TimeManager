@@ -259,14 +259,14 @@
     {!! $result($cableNegative) !!}
 @endif
 
-{{-- Izolacja obwodów --}}
+{{-- Izolacja obwodów — każda rozdzielnica na osobnej stronie (nagłówek, legenda, wynik) --}}
 @if ($hasInsulation)
-    <pagebreak />
-    @include('pdf.measurements.partials.head', ['subtitle' => 'z przeprowadzonych badań stanu izolacji przewodów'])
-    @php($insulationNegative = false)
     @foreach ($boards as $board)
         @php($circuits = $board->circuits->filter(fn ($circuit) => ! empty($circuit->insulation))->values())
         @continue($circuits->isEmpty())
+        <pagebreak />
+        @include('pdf.measurements.partials.head', ['subtitle' => 'z przeprowadzonych badań stanu izolacji przewodów'])
+        @php($insulationNegative = false)
         @php($voltages = $circuits->pluck('insulation_voltage')->unique()->implode('V / '))
         @if ($boards->count() > 1)
             {!! $tableTitle('Rozdzielnica '.$board->name) !!}
@@ -285,9 +285,8 @@
             @foreach ($circuits as $index => $circuit)
                 @php($passes = $circuit->insulationPasses())
                 @php($insulationNegative = $insulationNegative || $passes === false)
-                @php($readings = $circuit->insulation ?? [])
-                {{-- Obwody jednofazowe: L-N/L-PE w kolumnach L1-N/L1-PE. --}}
-                @php($readings = $circuit->phases === 3 ? $readings : array_filter(['L1-N' => $readings['L-N'] ?? null, 'L1-PE' => $readings['L-PE'] ?? null, 'N-PE' => $readings['N-PE'] ?? null]))
+                {{-- Obwody jednofazowe: L-N/L-PE w kolumnach swojej fazy (L1, L2 albo L3). --}}
+                @php($readings = $circuit->reportReadings())
                 <tr>
                     <td>{{ $index + 1 }}</td>
                     <td class="left">{{ $circuit->name }}</td>
@@ -302,18 +301,18 @@
                 </tr>
             @endforeach
         </table>
+        {!! $legend([
+            'Lp' => 'Liczba porządkowa',
+            'Obwód' => 'Nazwa obwodu / pomieszczenia',
+            'Nr' => 'Numer zabezpieczenia w rozdzielnicy',
+            'Przewód' => 'Rodzaj i przekrój przewodu',
+            'Uiso' => 'Napięcie probiercze',
+            'Ra' => 'Wymagana wartość rezystancji izolacji',
+            'Rs' => 'Zmierzona wartość rezystancji izolacji pomiędzy żyłami',
+        ]) !!}
+        @include('pdf.measurements.partials.inspection-info')
+        {!! $result($insulationNegative) !!}
     @endforeach
-    {!! $legend([
-        'Lp' => 'Liczba porządkowa',
-        'Obwód' => 'Nazwa obwodu / pomieszczenia',
-        'Nr' => 'Numer zabezpieczenia w rozdzielnicy',
-        'Przewód' => 'Rodzaj i przekrój przewodu',
-        'Uiso' => 'Napięcie probiercze',
-        'Ra' => 'Wymagana wartość rezystancji izolacji',
-        'Rs' => 'Zmierzona wartość rezystancji izolacji pomiędzy żyłami',
-    ]) !!}
-    @include('pdf.measurements.partials.inspection-info')
-    {!! $result($insulationNegative) !!}
 @endif
 
 {{-- Ciągłość przewodów ochronnych --}}

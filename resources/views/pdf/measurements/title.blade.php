@@ -19,12 +19,12 @@
 </div>
 
 {{-- Tytuł między liniami, numer po prawej — jak w dotychczasowym wzorze. --}}
-<table width="100%" style="border-collapse: collapse; margin-top: 18mm;">
+<table width="100%" style="border-collapse: collapse; margin-top: 4mm;">
     <tr><td style="border-top: 0.3mm solid #000; padding-top: 2mm; text-align: center; font-size: 24pt; font-weight: bold;">Protokół z pomiarów elektrycznych</td></tr>
     <tr><td style="border-bottom: 0.3mm solid #000; padding-bottom: 1mm; text-align: right; font-size: 10.5pt;">Numer: <b>{{ $protocol->number }}</b></td></tr>
 </table>
 
-<table class="meta title-meta" width="100%" style="margin-top: 8mm;">
+<table class="meta title-meta" width="100%" style="margin-top: 4mm;">
     <tr><td class="label">Wykonawca:</td><td class="value">{{ $company->name }}</td></tr>
     <tr><td class="label">Miejsce pomiaru:</td><td class="value">{{ $protocol->place }}</td></tr>
     @if ($protocol->investor)

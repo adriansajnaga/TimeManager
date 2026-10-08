@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $number
  * @property string $name
  * @property int $phases
+ * @property string $phase Faza obwodu jednofazowego: L1, L2 albo L3
  * @property ProtectionType|null $protection_type
  * @property string|null $protection_current
  * @property string|null $trip_current_override
@@ -28,7 +29,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read MeasurementBoard $board
  * @property-read MeasurementRcd|null $rcd
  */
-#[Fillable(['position', 'number', 'name', 'phases', 'protection_type', 'protection_current', 'trip_current_override', 'cable', 'rcd_id', 'insulation_voltage', 'insulation'])]
+#[Fillable(['position', 'number', 'name', 'phases', 'phase', 'protection_type', 'protection_current', 'trip_current_override', 'cable', 'rcd_id', 'insulation_voltage', 'insulation'])]
 class MeasurementCircuit extends Model
 {
     public const PAIRS_SINGLE = ['L-N', 'L-PE', 'N-PE'];
@@ -44,6 +45,38 @@ class MeasurementCircuit extends Model
     public function pairs(): array
     {
         return $this->phases === 3 ? self::PAIRS_THREE : self::PAIRS_SINGLE;
+    }
+
+    public const PHASES = ['L1', 'L2', 'L3'];
+
+    /**
+     * Para do wyświetlenia: w obwodzie jednofazowym „L” zastąpione jego fazą (L-N → L2-N).
+     */
+    public function pairLabel(string $pair): string
+    {
+        return $this->phases === 3 ? $pair : preg_replace('/^L(?=-)/', $this->phase, $pair);
+    }
+
+    /**
+     * Odczyty izolacji pod kolumnami raportu (L1-L2 … N-PE): jednofazowe trafiają pod swoją fazę.
+     *
+     * @return array<string, string>
+     */
+    public function reportReadings(): array
+    {
+        $readings = $this->insulation ?? [];
+
+        if ($this->phases === 3) {
+            return $readings;
+        }
+
+        $mapped = [];
+
+        foreach ($readings as $pair => $value) {
+            $mapped[$this->pairLabel($pair)] = $value;
+        }
+
+        return $mapped;
     }
 
     public function tripCurrent(MeasurementProtocol $protocol): ?float

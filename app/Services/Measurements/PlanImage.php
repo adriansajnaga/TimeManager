@@ -68,6 +68,13 @@ final class PlanImage
                 continue;
             }
 
+            // Główna szyna wyrównawcza: zielony prostokąt „GSW”.
+            if ($marker->isBonding()) {
+                $this->board($image, $x, $y, 'GSW', $size * 0.45, $font, $this->color($image, MeasurementMarker::BONDING_COLOR), $white, $black);
+
+                continue;
+            }
+
             $kind = $marker->kind();
             $color = $this->color($image, MeasurementMarker::COLORS[$kind]);
             $count = $marker->points->count();

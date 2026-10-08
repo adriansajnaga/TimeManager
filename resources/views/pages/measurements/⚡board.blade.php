@@ -78,6 +78,7 @@ new class extends Component {
             'number' => (string) $circuit->number,
             'name' => $circuit->name,
             'phases' => (string) $circuit->phases,
+            'phase' => $circuit->phase,
             'protection_type' => $circuit->protection_type?->value ?? '',
             'protection_current' => MeasurementInput::show($circuit->protection_current),
             'trip_current_override' => $this->tripCurrentField($circuit),
@@ -195,6 +196,7 @@ new class extends Component {
             'number' => $number,
             'name' => __('Circuit'),
             'phases' => $last->phases ?? 1,
+            'phase' => $last->phase ?? 'L1',
             'protection_type' => $last->protection_type ?? ProtectionType::B,
             'protection_current' => $last->protection_current ?? 16,
             'cable' => $last?->cable,
@@ -233,6 +235,7 @@ new class extends Component {
                 'number' => ['number' => trim((string) $value) ?: null],
                 'name' => ['name' => mb_substr(trim((string) $value), 0, 255) ?: __('Circuit')],
                 'phases' => ['phases' => (int) $value === 3 ? 3 : 1],
+                'phase' => ['phase' => in_array($value, MeasurementCircuit::PHASES, true) ? $value : 'L1'],
                 'protection_type' => ['protection_type' => ProtectionType::tryFrom((string) $value)],
                 'protection_current' => ['protection_current' => MeasurementInput::decimal($value)],
                 // Wartość równa wyliczonej (albo pusta) = automatycznie; inna = wpisana ręcznie.
@@ -384,6 +387,9 @@ new class extends Component {
     /** Tryb rzutu: stawianie rozdzielnicy (prostokąt z nazwą) zamiast punktu. */
     public bool $planBoard = false;
 
+    /** Tryb rzutu: stawianie głównej szyny wyrównawczej (GSW). */
+    public bool $planBonding = false;
+
     /** Wielkość symboli na rzucie w % szerokości rysunku (zapisana w protokole — ta sama w wydruku). */
     public float $markerSize = 2.5;
 
@@ -443,6 +449,53 @@ new class extends Component {
         );
 
         $this->planBoard = false;
+        unset($this->planMarkers);
+        Flux::modal('plan')->close();
+    }
+
+    /** Główna szyna wyrównawcza na rzucie — jedna na protokół. */
+    public function openBondingPlan(): void
+    {
+        if ($this->plans->isEmpty()) {
+            Flux::toast(variant: 'warning', text: __('Add a floor plan image to the protocol first (Drawings and attachments).'));
+
+            return;
+        }
+
+        $existing = $this->protocol->markers()->where('type', MeasurementMarker::TYPE_BONDING)->first();
+        $this->planPoint = null;
+        $this->planBoard = false;
+        $this->planBonding = true;
+        $this->planId = $existing?->attachment_id ?? ($this->planId !== null && $this->plans->contains('id', $this->planId) ? $this->planId : $this->plans->first()?->id);
+        unset($this->planMarkers);
+
+        Flux::modal('plan')->show();
+    }
+
+    public function placeBondingMarker(float $x, float $y): void
+    {
+        $this->authorize('manage-measurements');
+
+        if ($this->planId === null || ! $this->plans->contains('id', $this->planId)) {
+            return;
+        }
+
+        $this->protocol->markers()->updateOrCreate(
+            ['type' => MeasurementMarker::TYPE_BONDING],
+            ['attachment_id' => $this->planId, 'number' => 0, 'x' => max(0, min(100, $x)), 'y' => max(0, min(100, $y))],
+        );
+
+        $this->planBonding = false;
+        unset($this->planMarkers);
+        Flux::modal('plan')->close();
+    }
+
+    public function removeBondingMarker(): void
+    {
+        $this->authorize('manage-measurements');
+        $this->protocol->markers()->where('type', MeasurementMarker::TYPE_BONDING)->delete();
+
+        $this->planBonding = false;
         unset($this->planMarkers);
         Flux::modal('plan')->close();
     }
@@ -563,12 +616,12 @@ new class extends Component {
     /** Znaczniki bez punktów (po usunięciu punktu lub obwodu) znikają z rzutu. */
     private function pruneMarkers(): void
     {
-        $this->protocol->markers()->whereNull('board_id')->whereDoesntHave('points')->delete();
+        $this->protocol->markers()->whereNull('board_id')->whereNull('type')->whereDoesntHave('points')->delete();
     }
 
     private function dropIfEmpty(?MeasurementMarker $marker): void
     {
-        if ($marker !== null && ! $marker->isBoard() && ! $marker->points()->exists()) {
+        if ($marker !== null && $marker->isPoint() && ! $marker->points()->exists()) {
             $marker->delete();
         }
     }
@@ -626,6 +679,7 @@ new class extends Component {
             @unless ($board->isSupply())
                 <flux:button size="sm" icon="map-pin" wire:click="openBoardPlan">{{ __('On the plan') }}</flux:button>
             @endunless
+            <flux:button size="sm" icon="map-pin" wire:click="openBondingPlan" :tooltip="__('Main equipotential bonding bar on the plan')">{{ __('MEB') }}</flux:button>
             <flux:dropdown>
                 <flux:button icon="ellipsis-vertical" size="sm" :aria-label="__('More')" />
                 <flux:menu>
@@ -716,7 +770,7 @@ new class extends Component {
                 @if ($isOpen)
                     <div class="space-y-4 border-t border-zinc-200 p-4 dark:border-zinc-700">
                         @unless ($board->isSupply())
-                            <div class="grid grid-cols-2 gap-2 sm:grid-cols-[5rem_1fr_6rem_4.5rem]">
+                            <div class="grid grid-cols-2 gap-2 sm:grid-cols-[5rem_1fr_6rem_4.5rem_4.5rem]">
                                 <flux:input wire:model.live.debounce.700ms="circuits.{{ $circuit->id }}.number" size="sm" :label="__('No.')" placeholder="2F4" />
                                 <flux:input wire:model.live.debounce.700ms="circuits.{{ $circuit->id }}.name" size="sm" :label="__('Circuit / room')" />
                                 <flux:input wire:model.live.debounce.700ms="circuits.{{ $circuit->id }}.cable" size="sm" :label="__('Cable')" placeholder="3x2,5" />
@@ -724,6 +778,14 @@ new class extends Component {
                                     <flux:select.option value="1">1F</flux:select.option>
                                     <flux:select.option value="3">3F</flux:select.option>
                                 </flux:select>
+                                {{-- Na której fazie jest obwód jednofazowy (protokół izolacji: L2-N zamiast zawsze L1-N) --}}
+                                @if ($circuit->phases !== 3)
+                                    <flux:select wire:model.live="circuits.{{ $circuit->id }}.phase" size="sm" :label="__('Phase')">
+                                        @foreach (MeasurementCircuit::PHASES as $phase)
+                                            <flux:select.option :value="$phase">{{ $phase }}</flux:select.option>
+                                        @endforeach
+                                    </flux:select>
+                                @endif
                             </div>
                         @endunless
 
@@ -834,7 +896,7 @@ new class extends Component {
                                 <div class="grid grid-cols-3 gap-2 sm:grid-cols-5">
                                     @foreach ($circuit->pairs() as $pair)
                                         @php($pairOk = Criteria::insulationPasses($circuits[$circuit->id]['insulation'][$pair] ?? null, Criteria::requiredInsulation($circuit->insulation_voltage)))
-                                        <flux:input wire:model.live.debounce.700ms="circuits.{{ $circuit->id }}.insulation.{{ $pair }}" size="sm" :label="$pair" placeholder=">30"
+                                        <flux:input wire:model.live.debounce.700ms="circuits.{{ $circuit->id }}.insulation.{{ $pair }}" size="sm" :label="$circuit->pairLabel($pair)" placeholder=">30"
                                             :class="$pairOk === false ? 'ring-2 ring-red-500 rounded-lg' : ''" />
                                     @endforeach
                                 </div>
@@ -855,7 +917,7 @@ new class extends Component {
     @endunless
 
     {{-- Rzut: stuknij miejsce (nowy numer) albo istniejący numer (gniazdo dołącza do grupy) --}}
-    <flux:modal name="plan" class="w-full max-w-5xl" x-on:close="$wire.planPoint = null; $wire.planBoard = false">
+    <flux:modal name="plan" class="w-full max-w-5xl" x-on:close="$wire.planPoint = null; $wire.planBoard = false; $wire.planBonding = false">
         @php($planPointModel = $planPoint ? MeasurementPoint::query()->with('marker')->find($planPoint) : null)
         @php($plan = $planId ? $this->plans->firstWhere('id', $planId) : null)
 
@@ -869,6 +931,7 @@ new class extends Component {
                     const y = (event.clientY - rect.top) / rect.height * 100;
                     if (this.moving !== null) { this.$wire.moveMarker(this.moving, x, y); this.moving = null; return; }
                     if (this.$wire.planBoard) { this.$wire.placeBoardMarker(x, y); return; }
+                    if (this.$wire.planBonding) { this.$wire.placeBondingMarker(x, y); return; }
                     this.$wire.placeMarker(x, y);
                 },
             }">
@@ -876,6 +939,8 @@ new class extends Component {
                 <flux:heading size="lg">{{ __('Mark on the plan') }}</flux:heading>
                 @if ($planBoard)
                     <flux:text><b>{{ $board->name }}</b> — {{ __('tap the place of the board on the plan') }}</flux:text>
+                @elseif ($planBonding)
+                    <flux:text><b>{{ __('MEB') }}</b> — {{ __('tap the place of the main equipotential bonding bar on the plan') }}</flux:text>
                 @elseif ($planPointModel)
                     <flux:text>
                         <b>{{ $planPointModel->symbol }}</b> · {{ $planPointModel->location }}
@@ -921,7 +986,16 @@ new class extends Component {
                                     'ring-4 ring-blue-300' => $planBoard && $marker->board_id === $board->id,
                                 ])>{{ $marker->board?->name }}</span>
                         @endforeach
-                        @foreach ($this->planMarkers->reject(fn ($marker) => $marker->isBoard()) as $marker)
+                        @foreach ($this->planMarkers->filter(fn ($marker) => $marker->isBonding()) as $marker)
+                            {{-- Główna szyna wyrównawcza: zielony prostokąt „GSW” --}}
+                            <span wire:key="bonding-marker-{{ $marker->id }}"
+                                style="left: {{ (float) $marker->x }}%; top: {{ (float) $marker->y }}%; font-size: {{ $markerSize * 0.45 }}cqw; padding: 0.15em 0.5em; border-width: 0.12em; background-color: {{ MeasurementMarker::BONDING_COLOR }};"
+                                @class([
+                                    'pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border-solid border-zinc-900 font-bold leading-tight text-white',
+                                    'ring-4 ring-blue-300' => $planBonding,
+                                ])>{{ __('MEB') }}</span>
+                        @endforeach
+                        @foreach ($this->planMarkers->filter(fn ($marker) => $marker->isPoint()) as $marker)
                             @php($current = $planPointModel?->marker_id === $marker->id)
                             <button type="button" wire:key="marker-{{ $marker->id }}"
                                 wire:click="assignMarker({{ $marker->id }})"
@@ -941,10 +1015,31 @@ new class extends Component {
                 </div>
             @endif
 
+            {{-- Legenda rzutu: tylko symbole, które na nim są (jak w wydruku) --}}
+            @if ($plan && $this->planMarkers->isNotEmpty())
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-600 dark:text-zinc-300">
+                    @foreach (MeasurementMarker::legendItems($this->planMarkers) as $item)
+                        <span class="flex items-center gap-1.5">
+                            @if ($item === 'board')
+                                <span class="rounded-sm border border-zinc-900 bg-red-600 px-1 text-[0.6rem] font-bold text-white">R1</span> {{ __('Distribution board') }}
+                            @elseif ($item === 'bonding')
+                                <span class="rounded-sm border border-zinc-900 px-1 text-[0.6rem] font-bold text-white" style="background-color: {{ MeasurementMarker::BONDING_COLOR }}">{{ __('MEB') }}</span> {{ __('Main equipotential bonding bar') }}
+                            @else
+                                <span class="inline-block size-4"><x-plan-symbol :kind="$item" /></span> {{ __(MeasurementMarker::LEGEND[$item]) }}
+                            @endif
+                        </span>
+                    @endforeach
+                    <span class="flex items-center gap-1.5"><span class="rounded-full bg-zinc-500 px-1.5 text-[0.6rem] font-bold text-white">1</span> {{ __('number of the measuring point on the plan') }}</span>
+                </div>
+            @endif
+
             <div class="flex flex-wrap justify-between gap-2">
                 <div class="flex gap-2">
                     @if ($planBoard && $this->planMarkers->contains('board_id', $board->id))
                         <flux:button size="sm" variant="ghost" icon="x-mark" wire:click="removeBoardMarker">{{ __('Remove from the plan') }}</flux:button>
+                    @endif
+                    @if ($planBonding && $this->planMarkers->contains(fn ($marker) => $marker->isBonding()))
+                        <flux:button size="sm" variant="ghost" icon="x-mark" wire:click="removeBondingMarker">{{ __('Remove from the plan') }}</flux:button>
                     @endif
                     @if ($planPointModel?->marker)
                         <flux:button size="sm" icon="arrows-pointing-out" x-on:click="moving = {{ $planPointModel->marker->id }}">{{ __('Move marker') }}</flux:button>
