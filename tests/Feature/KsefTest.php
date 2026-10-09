@@ -9,6 +9,7 @@ use App\Enums\KsefStatus;
 use App\Enums\VatCode;
 use App\Models\CompanySetting;
 use App\Models\Contractor;
+use App\Models\ExchangeRate;
 use App\Models\Invoice;
 use App\Models\KsefSetting;
 use App\Models\User;
@@ -551,4 +552,27 @@ test('the download stops when its time is up', function () {
     expect($summary['remaining'])->toBe(2)
         ->and($summary['purchases'])->toBe(0)
         ->and($summary['stopped'])->not->toBeNull();
+});
+
+test('a reverse charge invoice in EUR gets the NBP rate from the day before and KursWaluty in its lines, a VAT line does not', function () {
+    fakeKsef();
+    // Kurs z dnia poprzedzającego datę sprzedaży (15.09) — w pamięci, bez pytania NBP.
+    ExchangeRate::query()->create(['currency' => 'EUR', 'effective_date' => '2026-09-14', 'rate' => '4.2610', 'table_number' => '178/A/NBP/2026']);
+
+    $invoice = draftInvoice($this->gaertner, [['1996.40', '1', VatCode::ReverseCharge]]);
+    $invoice->items()->update(['unit' => null]);
+
+    Livewire::actingAs($this->admin)->test('pages::invoices.show', ['invoice' => $invoice])->call('issue')->assertHasNoErrors();
+
+    $invoice->refresh()->load('items');
+    $xml = app(Fa3InvoiceBuilder::class)->build($invoice);
+
+    expect((string) $invoice->exchange_rate)->toStartWith('4.261')
+        ->and($invoice->exchange_rate_table)->toBe('178/A/NBP/2026')
+        ->and($xml)->toContain('<KursWaluty>4.261')
+        ->and($xml)->toContain('<P_8A>szt.</P_8A>');
+
+    // Ta sama faktura z VAT 23%: kurs służy do VAT w PLN, w wierszu go nie ma.
+    $invoice->items()->update(['vat_code' => VatCode::Rate23]);
+    expect(app(Fa3InvoiceBuilder::class)->build($invoice->fresh()->load('items')))->not->toContain('<KursWaluty>');
 });

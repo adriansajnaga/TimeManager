@@ -968,6 +968,7 @@
     "Retry With": "Spróbuj ponownie z użyciem",
     "Reverse charge": "Odwrotne obciążenie",
     "Reverse charge (domestic)": "Odwrotne obciążenie (oo)",
+    "Reverse charge invoices in a foreign currency need the NBP exchange rate (KursWaluty) — it could not be fetched, enter it on the invoice.": "Faktura z odwrotnym obciążeniem w walucie obcej wymaga kursu NBP (KursWaluty) — nie udało się go pobrać, wpisz go na fakturze.",
     "Role": "Role",
     "Rotate": "Obróć",
     "Route": "Trasa",

@@ -22,6 +22,7 @@ final class InvoiceIssuer
     public function __construct(
         private readonly InvoiceNumbering $numbering,
         private readonly InvoiceTransmitter $transmitter,
+        private readonly NbpExchangeRates $rates,
     ) {}
 
     /**
@@ -35,6 +36,7 @@ final class InvoiceIssuer
 
         Parties::apply($invoice);
         $invoice->load(['items', 'advances.items']);
+        $this->applyExchangeRate($invoice);
 
         $problems = $this->problems($invoice);
 
@@ -153,9 +155,44 @@ final class InvoiceIssuer
 
         if ($invoice->currency !== 'PLN' && $invoice->exchange_rate === null && ! $invoice->summary()->vat()->isZero()) {
             $problems[] = __('Foreign currency invoices with VAT need the exchange rate (VAT is shown in PLN).');
+        } elseif ($invoice->currency !== 'PLN' && $invoice->kind !== InvoiceKind::Proforma && $invoice->exchange_rate === null && $this->hasReverseCharge($invoice)) {
+            $problems[] = __('Reverse charge invoices in a foreign currency need the NBP exchange rate (KursWaluty) — it could not be fetched, enter it on the invoice.');
         }
 
         return $problems;
+    }
+
+    /**
+     * Faktura w walucie z VAT albo z odwrotnym obciążeniem: kurs średni NBP (tabela A) z ostatniego dnia
+     * roboczego przed datą sprzedaży (albo wystawienia). Przy „oo” trafia do wierszy (KursWaluty, jak
+     * w Aplikacji Podatnika) — urząd skarbowy przelicza po nim przychód. Kurs wpisany ręcznie zostaje.
+     */
+    private function applyExchangeRate(Invoice $invoice): void
+    {
+        if ($invoice->currency === 'PLN' || $invoice->kind === InvoiceKind::Proforma || $invoice->exchange_rate !== null) {
+            return;
+        }
+
+        if ($invoice->summary()->vat()->isZero() && ! $this->hasReverseCharge($invoice)) {
+            return;
+        }
+
+        try {
+            $rate = $this->rates->before($invoice->currency, $invoice->sale_date ?? $invoice->issue_date);
+        } catch (InvoiceException) {
+            return;
+        }
+
+        $invoice->forceFill([
+            'exchange_rate' => $rate->rate,
+            'exchange_rate_date' => $rate->effective_date->toDateString(),
+            'exchange_rate_table' => $rate->table_number,
+        ])->save();
+    }
+
+    private function hasReverseCharge(Invoice $invoice): bool
+    {
+        return $invoice->items->contains(fn ($item) => $item->vat_code === VatCode::ReverseCharge);
     }
 
     /**

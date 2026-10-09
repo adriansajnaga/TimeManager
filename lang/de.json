@@ -968,6 +968,7 @@
     "Retry With": "Wiederhole mit",
     "Reverse charge": "Reverse Charge",
     "Reverse charge (domestic)": "Reverse-Charge (Inland, oo)",
+    "Reverse charge invoices in a foreign currency need the NBP exchange rate (KursWaluty) — it could not be fetched, enter it on the invoice.": "Rechnungen mit Reverse-Charge in Fremdwährung brauchen den NBP-Kurs (KursWaluty) — er konnte nicht abgerufen werden, bitte auf der Rechnung eintragen.",
     "Role": "Rolle",
     "Rotate": "Drehen",
     "Route": "Strecke",

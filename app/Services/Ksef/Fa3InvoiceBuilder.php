@@ -276,13 +276,15 @@ class Fa3InvoiceBuilder
         $row = $this->child($fa, 'FaWiersz');
         $this->child($row, 'NrWierszaFa', (string) $position);
         $this->child($row, 'P_7', mb_substr($this->singleLine($item->name), 0, 512));
-        $this->optional($row, 'P_8A', (string) $item->unit);
+        // Jednostka zawsze (jak w Aplikacji Podatnika) — bez podanej: „szt.”.
+        $this->child($row, 'P_8A', mb_substr(trim((string) $item->unit) ?: 'szt.', 0, 50));
         $this->child($row, 'P_8B', $this->quantity($item->quantity));
         $this->child($row, 'P_9A', $this->amount($item->unit_price));
         $this->child($row, 'P_11', $this->amount($item->net));
         $this->child($row, 'P_12', $item->vat_code->value);
 
-        if ($invoice->currency !== 'PLN' && $invoice->exchange_rate !== null) {
+        // Kurs w wierszu tylko przy odwrotnym obciążeniu (jak w Aplikacji Podatnika) — do przeliczenia przychodu.
+        if ($invoice->currency !== 'PLN' && $invoice->exchange_rate !== null && $item->vat_code === VatCode::ReverseCharge) {
             $this->child($row, 'KursWaluty', $this->quantity($invoice->exchange_rate));
         }
 
@@ -323,7 +325,7 @@ class Fa3InvoiceBuilder
             $row = $this->child($order, 'ZamowienieWiersz');
             $this->child($row, 'NrWierszaZam', (string) ($index + 1));
             $this->child($row, 'P_7Z', mb_substr($this->singleLine($item->name), 0, 512));
-            $this->optional($row, 'P_8AZ', (string) $item->unit);
+            $this->child($row, 'P_8AZ', mb_substr(trim((string) $item->unit) ?: 'szt.', 0, 50));
             $this->child($row, 'P_8BZ', $this->quantity($item->quantity));
             $this->child($row, 'P_9AZ', $this->amount($item->unit_price));
             $this->child($row, 'P_11NettoZ', $this->amount($item->net));
