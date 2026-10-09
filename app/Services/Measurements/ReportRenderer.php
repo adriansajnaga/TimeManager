@@ -38,6 +38,12 @@ final class ReportRenderer
     {
         // Świeży odczyt: domyślne wartości kolumn (UL, ta) i aktualne wyniki.
         $protocol->refresh();
+
+        // Klient z Niemiec: jego formularz (Prüf- und Messprotokoll) i rzuty — nic więcej.
+        if ($protocol->usesGermanTemplate()) {
+            return app(GermanReportRenderer::class)->render($protocol);
+        }
+
         $protocol->syncContinuities();
         $protocol->load([
             'contractor', 'instrument.attachments', 'performers.attachments', 'inspections', 'attachments',

@@ -20,7 +20,7 @@ final class PlanImage
      *
      * @param  Collection<int, MeasurementMarker>  $markers
      */
-    public function annotate(Attachment $plan, Collection $markers, float $markerSize = 2.5): ?string
+    public function annotate(Attachment $plan, Collection $markers, float $markerSize = 2.5, string $bondingLabel = 'GSW'): ?string
     {
         $disk = Storage::disk('local');
 
@@ -70,7 +70,7 @@ final class PlanImage
 
             // Główna szyna wyrównawcza: zielony prostokąt „GSW”.
             if ($marker->isBonding()) {
-                $this->board($image, $x, $y, 'GSW', $size * 0.45, $font, $this->color($image, MeasurementMarker::BONDING_COLOR), $white, $black);
+                $this->board($image, $x, $y, $bondingLabel, $size * 0.45, $font, $this->color($image, MeasurementMarker::BONDING_COLOR), $white, $black);
 
                 continue;
             }

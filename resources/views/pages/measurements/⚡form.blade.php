@@ -52,6 +52,13 @@ new class extends Component {
 
     public string $next_test_on = '';
 
+    /** Wzór niemiecki (klient z DE): Grund der Prüfung i numery zlecenia. */
+    public string $inspection_reason = 'new';
+
+    public string $external_order = '';
+
+    public string $internal_order = '';
+
     public function mount(?MeasurementProtocol $protocol = null): void
     {
         if ($protocol?->exists) {
@@ -75,6 +82,9 @@ new class extends Component {
                 'remarks' => (string) $protocol->remarks,
                 'verdict' => (string) $protocol->verdict,
                 'next_test_on' => $protocol->next_test_on?->toDateString() ?? '',
+                'inspection_reason' => $protocol->inspection_reason,
+                'external_order' => (string) $protocol->external_order,
+                'internal_order' => (string) $protocol->internal_order,
             ]);
 
             return;
@@ -133,6 +143,9 @@ new class extends Component {
             'weather' => ['nullable', 'string', 'max:100'],
             'temperature' => ['nullable', 'numeric', 'between:-50,60'],
             'remarks' => ['nullable', 'string', 'max:10000'],
+            'inspection_reason' => ['required', Rule::in(array_keys(MeasurementProtocol::REASONS))],
+            'external_order' => ['nullable', 'string', 'max:100'],
+            'internal_order' => ['nullable', 'string', 'max:100'],
             'verdict' => ['nullable', 'string', 'max:5000'],
             'next_test_on' => ['nullable', 'date_format:Y-m-d'],
         ]);
@@ -166,6 +179,9 @@ new class extends Component {
                 'remarks' => trim($this->remarks) ?: null,
                 'verdict' => trim($this->verdict) ?: null,
                 'next_test_on' => $this->next_test_on ?: null,
+                'inspection_reason' => $this->inspection_reason,
+                'external_order' => trim($this->external_order) ?: null,
+                'internal_order' => trim($this->internal_order) ?: null,
             ])->save();
 
             $protocol->performers()->sync(array_map('intval', $this->performer_ids));
@@ -187,7 +203,7 @@ new class extends Component {
     #[Computed]
     public function contractors(): Collection
     {
-        return Contractor::query()->clients()->orderBy('name')->get(['id', 'name', 'city']);
+        return Contractor::query()->clients()->orderBy('name')->get(['id', 'name', 'city', 'country_code']);
     }
 
     /**
@@ -242,6 +258,22 @@ new class extends Component {
             </div>
 
             <flux:input wire:model="investor" :label="__('Investor')" :placeholder="__('Name and address')" />
+
+            {{-- Klient z Niemiec: wydruk na niemieckim wzorze — pola, których nie ma w polskim protokole --}}
+            @if ($contractor_id && $this->contractors->firstWhere('id', (int) $contractor_id)?->country_code === 'DE')
+                <flux:callout icon="language" color="sky">
+                    <flux:callout.text>{{ __('Client from Germany — the protocol is printed on the German form (Prüf- und Messprotokoll) with the floor plan only.') }}</flux:callout.text>
+                </flux:callout>
+                <div class="grid gap-6 sm:grid-cols-3">
+                    <flux:select wire:model="inspection_reason" :label="__('Grund der Prüfung')">
+                        @foreach (MeasurementProtocol::REASONS as $value => $label)
+                            <flux:select.option :value="$value">{{ $label }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
+                    <flux:input wire:model="external_order" :label="__('Externe Auftragsnummer')" />
+                    <flux:input wire:model="internal_order" :label="__('Interne Auftragsnummer')" />
+                </div>
+            @endif
             <flux:input wire:model="description" :label="__('Description')" :placeholder="__('e.g. Electrical installation in a new residential building')" />
         </flux:card>
 

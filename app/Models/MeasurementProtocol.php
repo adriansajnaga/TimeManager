@@ -39,13 +39,16 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $verdict
  * @property CarbonImmutable|null $next_test_on
  * @property int|null $created_by
+ * @property string $inspection_reason Powód badania (wzór niemiecki): new, extension, change, repair, repeat, echeck
+ * @property string|null $external_order
+ * @property string|null $internal_order
  * @property-read Contractor|null $contractor
  * @property-read MeasurementInstrument|null $instrument
  */
 #[Fillable([
     'number', 'year', 'month', 'sequence', 'contractor_id', 'investor', 'place', 'description', 'measured_on', 'instrument_id',
     'network', 'phase_voltage', 'line_voltage', 'touch_voltage', 'disconnection_time', 'weather', 'temperature',
-    'remarks', 'verdict', 'next_test_on', 'created_by',
+    'remarks', 'verdict', 'next_test_on', 'created_by', 'inspection_reason', 'external_order', 'internal_order',
 ])]
 class MeasurementProtocol extends Model implements Attachable
 {
@@ -57,6 +60,24 @@ class MeasurementProtocol extends Model implements Attachable
     public const DEFAULT_VERDICT = 'Instalacja elektryczna w przedmiotowym zakresie wykonanych pomiarów spełnia wymagania norm i przepisów. Instalacja nadaje się do eksploatacji.';
 
     public const NETWORKS = ['TN-C-S', 'TN-S', 'TN-C', 'TT', 'IT'];
+
+    /** Grund der Prüfung — pola wyboru na wzorze niemieckim (kolejność jak w formularzu). */
+    public const REASONS = [
+        'new' => 'Neuanlage',
+        'extension' => 'Erweiterung',
+        'change' => 'Änderung',
+        'repair' => 'Instandsetzung',
+        'repeat' => 'Wiederholungsprüfung',
+        'echeck' => 'E-Check',
+    ];
+
+    /**
+     * Klient z Niemiec — wydruk na niemieckim wzorze (Prüf- und Messprotokoll) z samym rzutem.
+     */
+    public function usesGermanTemplate(): bool
+    {
+        return $this->contractor?->country_code === 'DE';
+    }
 
     /**
      * Oględziny jak w dotychczasowym protokole: sekcja, punkt, normy.
