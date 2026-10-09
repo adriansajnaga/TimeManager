@@ -4,17 +4,20 @@
     'placeholder' => null,
     'searchPlaceholder' => null,
     'name' => null,
+    'clearable' => false,
 ])
 
 {{--
     Lista wyboru z polem szukania (Flux w wersji darmowej go nie ma).
     $options: list<array{value: int|string, label: string, search?: string}>; wire:model jak przy flux:select.
     Szukanie ignoruje wielkość liter i znaki diakrytyczne (np. „lurssen” znajdzie „Lürssen”).
+    clearable: na górze listy pozycja z placeholderem — wybór „brak” (wartość pusta).
 --}}
 @php
     $model = $attributes->wire('model')->value();
     $name ??= $model;
     $placeholder ??= __('Choose…');
+    $options = $clearable ? [['value' => '', 'label' => $placeholder, 'empty' => true], ...array_values($options)] : array_values($options);
 @endphp
 
 <flux:field>
@@ -28,7 +31,7 @@
             open: false,
             query: '',
             active: 0,
-            options: @js(array_values($options)),
+            options: @js($options),
             normalize(text) {
                 return String(text ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
             },
@@ -41,8 +44,8 @@
                 });
             },
             get selectedLabel() {
-                const option = this.options.find(option => String(option.value) === String(this.value));
-                return option ? option.label : '';
+                const option = this.options.find(option => String(option.value) === String(this.value ?? ''));
+                return option && ! option.empty ? option.label : '';
             },
             show() {
                 this.open = true;

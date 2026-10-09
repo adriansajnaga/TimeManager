@@ -252,7 +252,7 @@ new class extends Component {
             </div>
 
             <div class="grid gap-6 sm:grid-cols-2">
-                <x-searchable-select wire:model.live="contractor_id" :label="__('Client (optional)')" :placeholder="__('— none —')"
+                <x-searchable-select wire:model.live="contractor_id" :label="__('Client (optional)')" :placeholder="__('— none —')" clearable
                     :options="$this->contractors->map(fn ($contractor) => ['value' => (string) $contractor->id, 'label' => $contractor->name, 'search' => (string) $contractor->city])->all()" />
                 <flux:input wire:model="number" :label="__('Protocol number')" required />
             </div>
@@ -264,12 +264,7 @@ new class extends Component {
                 <flux:callout icon="language" color="sky">
                     <flux:callout.text>{{ __('Client from Germany — the protocol is printed on the German form (Prüf- und Messprotokoll) with the floor plan only.') }}</flux:callout.text>
                 </flux:callout>
-                <div class="grid gap-6 sm:grid-cols-3">
-                    <flux:select wire:model="inspection_reason" :label="__('Grund der Prüfung')">
-                        @foreach (MeasurementProtocol::REASONS as $value => $label)
-                            <flux:select.option :value="$value">{{ $label }}</flux:select.option>
-                        @endforeach
-                    </flux:select>
+                <div class="grid gap-6 sm:grid-cols-2">
                     <flux:input wire:model="external_order" :label="__('Externe Auftragsnummer')" />
                     <flux:input wire:model="internal_order" :label="__('Interne Auftragsnummer')" />
                 </div>

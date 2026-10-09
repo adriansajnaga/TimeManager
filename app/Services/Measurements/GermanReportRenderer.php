@@ -4,9 +4,7 @@ namespace App\Services\Measurements;
 
 use App\Models\Attachment;
 use App\Models\Contractor;
-use App\Models\MeasurementBoard;
 use App\Models\MeasurementCircuit;
-use App\Models\MeasurementInspection;
 use App\Models\MeasurementMarker;
 use App\Models\MeasurementPoint;
 use App\Models\MeasurementProtocol;
@@ -88,7 +86,7 @@ final class GermanReportRenderer
     /**
      * Firma z nagłówka formularza — kontrahent (np. Gärtner Elektrotechnik GmbH).
      *
-     * @return array{name: string, short: string, address: string, contact: string, hpm: bool}
+     * @return array{name: string, short: string, address: string, contact: string}
      */
     private function company(?Contractor $contractor): array
     {
@@ -105,13 +103,12 @@ final class GermanReportRenderer
                 filled($contractor?->fax) ? 'Fax '.$contractor->fax : null,
             ])->filter()->implode(' · '),
             'contact' => collect([$contractor?->email, $contractor?->website])->filter()->implode(' · '),
-            // Znak grupy HPM jest częścią formularza Gärtner Elektrotechnik.
-            'hpm' => str_contains(mb_strtolower($name), 'gärtner'),
         ];
     }
 
     /**
-     * Pola pierwszej strony: zleceniodawca, powód badania, sieć, oględziny, próby, przyrząd, wynik.
+     * Pola pierwszej strony: zleceniodawca, pierwsza rozdzielnica, przyrząd i wynik.
+     * Pola wyboru nagłówka (powód, norma, sieć, oględziny, próby) zostają puste — zaznacza je klient.
      *
      * @return array<string, mixed>
      */
@@ -119,10 +116,6 @@ final class GermanReportRenderer
     {
         // „Inwestor” zapisany jako „Nazwa, adres” — rozdzielony na dwa pola formularza.
         [$client, $clientAddress] = array_pad(array_map('trim', explode(',', (string) $protocol->investor, 2)), 2, '');
-        $negative = $protocol->inspections->contains(fn (MeasurementInspection $item) => $item->result === 'non_compliant');
-        $hasThreePhase = $protocol->boards->contains(fn (MeasurementBoard $board) => $board->circuits->contains(fn (MeasurementCircuit $circuit) => $circuit->phases === 3));
-        $hasRcd = $protocol->boards->contains(fn (MeasurementBoard $board) => $board->rcds->contains(fn ($rcd) => $rcd->trip_time !== null || $rcd->trip_current !== null));
-        $defects = $this->hasDefects($protocol);
         $instrument = $protocol->instrument;
         [$make, $model] = array_pad(explode(' ', (string) $instrument?->name, 2), 2, '');
 
@@ -130,36 +123,13 @@ final class GermanReportRenderer
             'client' => $client,
             'clientAddress' => $clientAddress,
             'board' => $protocol->boards->first()?->name,
-            'reason' => $protocol->inspection_reason,
-            // Nowa instalacja i zmiany — DIN VDE 0100-600; badania okresowe — DIN VDE 0105-100.
-            'standard' => in_array($protocol->inspection_reason, ['repeat', 'echeck'], true) ? '0105' : '0100',
-            'inspectionOk' => $protocol->inspections->isNotEmpty() && ! $negative,
-            'checks' => [
-                'rotation' => $hasThreePhase,
-                'function' => true,
-                'rcd' => $hasRcd,
-                'earthing' => $protocol->earthings->contains(fn ($row) => $row->resistance !== null),
-                'pe' => $protocol->continuities->contains(fn ($row) => $row->resistance !== null),
-            ],
             'instrument' => $instrument === null ? null : [
                 'make' => $make,
                 'model' => $model,
                 'serial' => (string) $instrument->serial_number,
                 'until' => $instrument->calibration_valid_until?->format('d.m.Y'),
             ],
-            'defects' => $defects,
         ];
-    }
-
-    private function hasDefects(MeasurementProtocol $protocol): bool
-    {
-        foreach ($this->rows($protocol) as $row) {
-            if (($row['ok'] ?? null) === false) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**

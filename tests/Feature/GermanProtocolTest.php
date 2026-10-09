@@ -62,11 +62,25 @@ test('the protocol form asks for the German fields only for a client from German
         ->set('contractor_id', (string) $german->id)
         ->assertSee('Externe Auftragsnummer')
         ->set('place', 'Halle 14')
-        ->set('inspection_reason', 'repeat')
         ->set('external_order', 'EXT-4711')
         ->call('save')
         ->assertHasNoErrors();
 
     $protocol = MeasurementProtocol::query()->latest('id')->first();
-    expect($protocol->inspection_reason)->toBe('repeat')->and($protocol->external_order)->toBe('EXT-4711');
+    expect($protocol->external_order)->toBe('EXT-4711');
+});
+
+test('the client can be cleared again in the protocol form', function () {
+    $german = Contractor::factory()->create(['country_code' => 'DE']);
+    $protocol = MeasurementProtocol::query()->create([...MeasurementProtocol::nextNumber(now()), 'contractor_id' => $german->id, 'place' => 'Halle 14', 'measured_on' => now()->toDateString()])->refresh();
+
+    Livewire::actingAs($this->admin)->test('pages::measurements.form', ['protocol' => $protocol])
+        ->assertSee(__('— none —'))
+        ->set('contractor_id', '')
+        ->assertDontSee('Externe Auftragsnummer')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($protocol->refresh()->contractor_id)->toBeNull()
+        ->and($protocol->usesGermanTemplate())->toBeFalse();
 });

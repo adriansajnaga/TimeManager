@@ -1,6 +1,7 @@
-{{-- Pierwsza strona formularza „Prüf- und Messprotokoll für elektrische Anlagen” (układ jak w oryginale klienta). --}}
+{{-- Pierwsza strona formularza „Prüf- und Messprotokoll für elektrische Anlagen” (układ jak w oryginale klienta).
+     Pola do odhaczenia, których nie ustawia się w aplikacji (nagłówek, wynik, Prüfplakette), zostają puste — zaznacza je klient.
+     Ocena i.O. / nicht i.O. w tabeli obwodów wynika z pomiarów. --}}
 @php
-    $x = fn (bool $checked) => $checked ? 'X' : '';
     $date = fn ($value) => $value?->format('d.m.Y') ?? '';
     $reasons = \App\Models\MeasurementProtocol::REASONS;
     $visual = [
@@ -50,14 +51,14 @@
 <table class="form">
     <tr>
         <td class="label" rowspan="2" style="width: 17%;">Grund der Prüfung</td>
-        <td class="item">{{ $reasons['new'] }}</td><td class="box">{{ $x($reason === 'new') }}</td>
-        <td class="item">{{ $reasons['change'] }}</td><td class="box">{{ $x($reason === 'change') }}</td>
-        <td class="item">{{ $reasons['repeat'] }}</td><td class="box">{{ $x($reason === 'repeat') }}</td>
+        <td class="item">{{ $reasons['new'] }}</td><td class="box"></td>
+        <td class="item">{{ $reasons['change'] }}</td><td class="box"></td>
+        <td class="item">{{ $reasons['repeat'] }}</td><td class="box"></td>
     </tr>
     <tr>
-        <td class="item">{{ $reasons['extension'] }}</td><td class="box">{{ $x($reason === 'extension') }}</td>
-        <td class="item">{{ $reasons['repair'] }}</td><td class="box">{{ $x($reason === 'repair') }}</td>
-        <td class="item">{{ $reasons['echeck'] }}</td><td class="box">{{ $x($reason === 'echeck') }}</td>
+        <td class="item">{{ $reasons['extension'] }}</td><td class="box"></td>
+        <td class="item">{{ $reasons['repair'] }}</td><td class="box"></td>
+        <td class="item">{{ $reasons['echeck'] }}</td><td class="box"></td>
     </tr>
 </table>
 
@@ -65,11 +66,11 @@
 <table class="form">
     <tr>
         <td class="label" rowspan="2" style="width: 17%;">Prüfung durchgeführt nach:</td>
-        <td class="item" style="width: 24%;">DIN VDE 0100 T.600</td><td class="box">{{ $x($standard === '0100') }}</td>
+        <td class="item" style="width: 24%;">DIN VDE 0100 T.600</td><td class="box"></td>
         <td class="item">UVV "Elektrische Anlagen und Betriebsmittel (DGUV V3)"</td><td class="box"></td>
     </tr>
     <tr>
-        <td class="item">DIN VDE 0105 T.100</td><td class="box">{{ $x($standard === '0105') }}</td>
+        <td class="item">DIN VDE 0105 T.100</td><td class="box"></td>
         <td></td><td class="box"></td>
     </tr>
 </table>
@@ -81,7 +82,7 @@
         <td style="width: 15%; text-align: center;">{{ $protocol->phase_voltage }} V / {{ $protocol->line_voltage }} V</td>
         <td class="label" style="width: 10%;">Netzform:</td>
         @foreach (['TN-C', 'TN-S', 'TN-C-S', 'TT', 'IT'] as $network)
-            <td class="item">{{ $network }}</td><td class="box">{{ $x($protocol->network === $network) }}</td>
+            <td class="item">{{ $network }}</td><td class="box"></td>
         @endforeach
     </tr>
 </table>
@@ -98,7 +99,7 @@
             @foreach ($line as $item)
                 <td class="item" style="font-size: {{ mb_strlen($item) > 60 ? 5.8 : 7 }}pt;">{{ $item }}</td>
                 <td class="box"></td>
-                <td class="box">{{ $x($inspectionOk) }}</td>
+                <td class="box"></td>
             @endforeach
         </tr>
     @endforeach
@@ -108,19 +109,19 @@
 <table class="form">
     <tr><td class="head" colspan="6">Erprobung</td></tr>
     <tr>
-        <td class="item" style="width: 30%;">Rechtsdrehfeld der Drehstromsteckdosen</td><td class="box">{{ $x($checks['rotation']) }}</td>
-        <td class="item" style="width: 30%;">Funktion der elektrischen Anlage</td><td class="box">{{ $x($checks['function']) }}</td>
+        <td class="item" style="width: 30%;">Rechtsdrehfeld der Drehstromsteckdosen</td><td class="box"></td>
+        <td class="item" style="width: 30%;">Funktion der elektrischen Anlage</td><td class="box"></td>
         <td class="item" style="width: 30%;">Drehrichtung der Motoren</td><td class="box"></td>
     </tr>
     <tr>
         <td class="item">Überwachungseinrichtungen</td><td class="box"></td>
-        <td class="item">FI-Schutzschalter (RCD)</td><td class="box">{{ $x($checks['rcd']) }}</td>
+        <td class="item">FI-Schutzschalter (RCD)</td><td class="box"></td>
         <td class="item">Gebäudesystemtechnik</td><td class="box"></td>
     </tr>
     <tr>
         <td class="head" colspan="2">Messung</td>
-        <td class="item">Erdungswiderstand</td><td class="box">{{ $x($checks['earthing']) }}</td>
-        <td class="item">Zuverlässige Verbindung der Schutzleiter</td><td class="box">{{ $x($checks['pe']) }}</td>
+        <td class="item">Erdungswiderstand</td><td class="box"></td>
+        <td class="item">Zuverlässige Verbindung der Schutzleiter</td><td class="box"></td>
     </tr>
 </table>
 
@@ -164,12 +165,13 @@
         <td class="label">Nächster Prüftermin:</td>
     </tr>
     <tr>
-        <td class="item" style="width: 34%; background-color: #d9d9d9;">es wurden <b>keine Mängel</b> festgestellt</td><td class="box" style="width: 4%;">{{ $x(! $defects) }}</td>
+        <td class="item" style="width: 34%; background-color: #d9d9d9;">es wurden <b>keine Mängel</b> festgestellt</td><td class="box" style="width: 4%;"></td>
         <td class="item" style="width: 16%; background-color: #d9d9d9;">ja</td><td class="box" style="width: 4%;"></td>
-        <td rowspan="2" style="text-align: center; font-size: 9pt;">{{ $date($protocol->next_test_on) }}</td>
+        {{-- Termin następnego badania zostaje pusty — ustala go klient (DGUV V3, ocena zagrożeń). --}}
+        <td rowspan="2"></td>
     </tr>
     <tr>
-        <td class="item" style="background-color: #d9d9d9;">es wurden <b>Mängel</b> festgestellt</td><td class="box">{{ $x($defects) }}</td>
+        <td class="item" style="background-color: #d9d9d9;">es wurden <b>Mängel</b> festgestellt</td><td class="box"></td>
         <td class="item" style="background-color: #d9d9d9;">nein</td><td class="box"></td>
     </tr>
 </table>
@@ -181,11 +183,11 @@
         <td class="label" colspan="2">Kontrolle Auftraggeber:</td>
     </tr>
     <tr>
-        <td class="item" style="width: 49%; font-size: 6.3pt; background-color: #d9d9d9;">Die Anlage entspricht den anerkannten Regeln der Elektrotechnik</td><td class="box" style="width: 6%;">{{ $x(! $defects) }}</td>
+        <td class="item" style="width: 49%; font-size: 6.3pt; background-color: #d9d9d9;">Die Anlage entspricht den anerkannten Regeln der Elektrotechnik</td><td class="box" style="width: 6%;"></td>
         <td class="item" style="width: 39%; font-size: 6.3pt; background-color: #d9d9d9;">Gemäß Übergabebericht Anlage vollständig übernommen</td><td class="box" style="width: 6%;"></td>
     </tr>
     <tr>
-        <td class="item" style="font-size: 6.3pt; background-color: #d9d9d9;">Die Anlage entspricht <b>nicht</b> den anerkannten Regeln der Elektrotechnik</td><td class="box">{{ $x($defects) }}</td>
+        <td class="item" style="font-size: 6.3pt; background-color: #d9d9d9;">Die Anlage entspricht <b>nicht</b> den anerkannten Regeln der Elektrotechnik</td><td class="box"></td>
         <td class="item" style="font-size: 6.3pt; background-color: #d9d9d9;">Zustandsbericht erhalten</td><td class="box"></td>
     </tr>
 </table>
