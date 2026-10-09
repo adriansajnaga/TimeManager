@@ -161,15 +161,15 @@
     {!! $result($loopNegative) !!}
 @endforeach
 
-{{-- WLZ: pętla zwarcia odcinka zasilającego --}}
+{{-- WLZ: pętla zwarcia odcinka zasilającego — każdy pomiar na osobnej stronie (nagłówek, legenda, wynik) --}}
 @if ($hasSupply)
-    <pagebreak />
-    @include('pdf.measurements.partials.head', ['subtitle' => 'Pomiar impedancji pętli zwarcia'])
-    @php($supplyNegative = false)
     @foreach ($supply as $board)
         @foreach ($board->circuits as $circuit)
             @php($points = $circuit->points->whereNotNull('impedance')->values())
             @continue($points->isEmpty())
+            <pagebreak />
+            @include('pdf.measurements.partials.head', ['subtitle' => 'Pomiar impedancji pętli zwarcia'])
+            @php($supplyNegative = false)
             @php($ia = $circuit->tripCurrent($protocol))
             @php($za = Criteria::allowedImpedance($protocol->phase_voltage, $ia))
             {!! $tableTitle($board->name.' – od strony rozdzielni elektrycznej') !!}
@@ -196,19 +196,19 @@
                     </tr>
                 @endforeach
             </table>
+            {!! $legend([
+                'Lp' => 'Liczba porządkowa',
+                'Badany odcinek' => 'Rodzaj badanego obwodu lub odcinka',
+                'Typ' => 'Charakterystyka zabezpieczenia nadmiarowo-prądowego',
+                'In' => 'Prąd nominalny zabezpieczenia nadmiarowo-prądowego',
+                'Ia' => 'Prąd powodujący wyzwolenie zabezpieczenia nadmiarowo-prądowego',
+                'Zs' => 'Zmierzona impedancja pętli zwarcia',
+                'Za' => 'Wartość wymagana impedancji pętli zwarcia Za = Uo/Ia',
+                'Ik' => 'Prąd zwarcia wyliczony Ik = Uo/Zs',
+            ]) !!}
+            {!! $result($supplyNegative) !!}
         @endforeach
     @endforeach
-    {!! $legend([
-        'Lp' => 'Liczba porządkowa',
-        'Badany odcinek' => 'Rodzaj badanego obwodu lub odcinka',
-        'Typ' => 'Charakterystyka zabezpieczenia nadmiarowo-prądowego',
-        'In' => 'Prąd nominalny zabezpieczenia nadmiarowo-prądowego',
-        'Ia' => 'Prąd powodujący wyzwolenie zabezpieczenia nadmiarowo-prądowego',
-        'Zs' => 'Zmierzona impedancja pętli zwarcia',
-        'Za' => 'Wartość wymagana impedancji pętli zwarcia Za = Uo/Ia',
-        'Ik' => 'Prąd zwarcia wyliczony Ik = Uo/Zs',
-    ]) !!}
-    {!! $result($supplyNegative) !!}
 @endif
 
 {{-- Izolacja kabli --}}

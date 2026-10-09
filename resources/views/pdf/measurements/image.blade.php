@@ -5,7 +5,8 @@
     <h3>{{ $caption }}</h3>
 @endif
 <div style="text-align: center; margin-top: 4mm;">
-    <img src="{{ $path }}" style="max-width: 180mm; max-height: 190mm;">
+    {{-- Rzut + legenda muszą zmieścić się na jednej stronie: im dłuższa legenda, tym niższy rysunek. --}}
+    <img src="{{ $path }}" style="max-width: 180mm; max-height: {{ empty($legend) ? 200 : 168 - 5 * count($legend) }}mm;">
 </div>
 
 {{-- Legenda rzutu: tylko symbole, które są na rysunku (te same co na ekranie, components/plan-symbol). --}}

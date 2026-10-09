@@ -287,6 +287,31 @@ new class extends Component {
         $this->refreshState();
     }
 
+    /** Zmienia kolejność obwodów (−1 w górę, +1 w dół) — tak samo w tabelach protokołu. */
+    public function moveCircuit(int $id, int $direction): void
+    {
+        $this->authorize('manage-measurements');
+        $circuits = $this->board->circuits()->get()->values();
+        $index = $circuits->search(fn (MeasurementCircuit $circuit) => $circuit->id === $id);
+
+        if ($index === false || ! isset($circuits[$index + $direction])) {
+            return;
+        }
+
+        $other = $circuits[$index + $direction];
+        $circuits[$index + $direction] = $circuits[$index];
+        $circuits[$index] = $other;
+
+        foreach ($circuits as $position => $circuit) {
+            if ($circuit->position !== $position + 1) {
+                $circuit->update(['position' => $position + 1]);
+            }
+        }
+
+        $this->open = $id;
+        $this->refreshState();
+    }
+
     public function deleteCircuit(int $id): void
     {
         $this->authorize('manage-measurements');
@@ -902,7 +927,11 @@ new class extends Component {
                                 </div>
                             </div>
 
-                            <div class="flex justify-end">
+                            <div class="flex justify-between gap-2">
+                                <div class="flex gap-1">
+                                    <flux:button size="sm" variant="ghost" icon="arrow-up" wire:click="moveCircuit({{ $circuit->id }}, -1)" :disabled="$loop->first">{{ __('Up') }}</flux:button>
+                                    <flux:button size="sm" variant="ghost" icon="arrow-down" wire:click="moveCircuit({{ $circuit->id }}, 1)" :disabled="$loop->last">{{ __('Down') }}</flux:button>
+                                </div>
                                 <flux:button size="sm" variant="ghost" icon="trash" wire:click="deleteCircuit({{ $circuit->id }})" wire:confirm="{{ __('Delete this circuit with its results?') }}">{{ __('Delete circuit') }}</flux:button>
                             </div>
                         @endunless

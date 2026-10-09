@@ -25,7 +25,7 @@ new class extends Component {
     /**
      * Dni pracy na projekcie od najnowszego: data, godziny, osoby, rodzaj i opisy wpisów.
      *
-     * @return Collection<int, object{date: \Carbon\CarbonImmutable, week_id: int, hours: string, people: string, types: string, descriptions: string}>
+     * @return Collection<int, object{date: \Carbon\CarbonImmutable, week_id: int, person: int|null, hours: string, people: string, types: string, descriptions: string}>
      */
     #[Computed]
     public function workingDays(): Collection
@@ -39,6 +39,8 @@ new class extends Component {
             ->map(fn (Collection $entries) => (object) [
                 'date' => $entries->first()->work_date,
                 'week_id' => $entries->first()->work_week_id,
+                // Jedna osoba tego dnia — od razu jej czas pracy (godziny od–do).
+                'person' => $entries->pluck('user_id')->unique()->count() === 1 ? $entries->first()->user_id : null,
                 'hours' => (string) $entries->reduce(fn (BigDecimal $sum, TimeEntry $entry) => $sum->plus($entry->hours), BigDecimal::zero()),
                 'people' => $entries->map(fn (TimeEntry $entry) => $entry->user->name)->unique()->implode(', '),
                 'types' => $entries->map(fn (TimeEntry $entry) => $entry->work_type->label())->unique()->implode(', '),
@@ -212,7 +214,8 @@ new class extends Component {
                         @foreach ($this->workingDays as $day)
                             <flux:table.row :key="'day-'.$day->date->toDateString()">
                                 <flux:table.cell class="whitespace-nowrap">
-                                    <flux:link :href="route('weeks.show', $day->week_id)" wire:navigate>{{ $day->date->format('d.m.Y') }}</flux:link>
+                                    {{-- Do „Czasu pracy” tego tygodnia (godziny od–do), a nie do zamkniętego tygodnia --}}
+                                    <flux:link :href="route('time.week', array_filter(['week' => $day->date->format('o-\WW'), 'person' => $day->person !== auth()->id() ? $day->person : null]))" wire:navigate>{{ $day->date->format('d.m.Y') }}</flux:link>
                                     <span class="text-xs text-zinc-500">{{ $day->date->translatedFormat('D') }}</span>
                                 </flux:table.cell>
                                 <flux:table.cell align="end">{{ rtrim(rtrim(number_format((float) $day->hours, 2, ',', ' '), '0'), ',') }}</flux:table.cell>

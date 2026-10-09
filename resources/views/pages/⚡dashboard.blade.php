@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\InvoiceDirection;
 use App\Enums\InvoiceKind;
 use App\Enums\InvoiceStatus;
 use App\Enums\KsefStatus;
@@ -58,12 +59,10 @@ new #[Title('Dashboard')] class extends Component {
     }
 
     /**
-     * Otwarte części tygodni z godzinami (pracownik — swoimi), od najstarszej.
-     *
-     * @return Collection<int, WorkWeek>
+     * Liczba otwartych części tygodni z godzinami (pracownik — swoimi).
      */
     #[Computed]
-    public function openWeeks(): Collection
+    public function openWeeks(): int
     {
         $all = Auth::user()->hasPermission(Permission::ViewAllTimeEntries);
 
@@ -71,9 +70,58 @@ new #[Title('Dashboard')] class extends Component {
             ->whereNull('closed_at')
             ->whereHas('timeEntries', fn ($entries) => $entries->when(! $all, fn ($query) => $query->where('user_id', Auth::id())))
             ->where('starts_on', '<=', CarbonImmutable::today()->toDateString())
-            ->orderBy('starts_on')
-            ->limit(8)
-            ->get();
+            ->count();
+    }
+
+    /**
+     * Sprzedaż i zakupy netto w PLN, miesiąc po miesiącu (ostatnie 12 miesięcy, wg daty wystawienia).
+     * Faktury w walucie przeliczone kursem z faktury; bez kursu — pominięte i policzone w „missing”.
+     *
+     * @return array{months: list<array{key: string, label: string, sales: float, purchases: float}>, missing: int, sales: float, purchases: float}
+     */
+    #[Computed]
+    public function monthly(): array
+    {
+        $start = CarbonImmutable::today()->startOfMonth()->subMonths(11);
+        $months = [];
+
+        for ($i = 0; $i < 12; $i++) {
+            $month = $start->addMonths($i);
+            $months[$month->format('Y-m')] = ['key' => $month->format('Y-m'), 'label' => $month->translatedFormat('M y'), 'sales' => 0.0, 'purchases' => 0.0];
+        }
+
+        $missing = 0;
+
+        $invoices = Invoice::query()
+            ->where('status', InvoiceStatus::Issued)
+            ->where('kind', '!=', InvoiceKind::Proforma)
+            ->where('issue_date', '>=', $start->toDateString())
+            ->get(['direction', 'currency', 'net', 'exchange_rate', 'issue_date']);
+
+        foreach ($invoices as $invoice) {
+            $key = $invoice->issue_date->format('Y-m');
+
+            if (! isset($months[$key])) {
+                continue;
+            }
+
+            $pln = $invoice->currency === 'PLN' ? (float) $invoice->net : ($invoice->exchange_rate !== null ? (float) $invoice->net * (float) $invoice->exchange_rate : null);
+
+            if ($pln === null) {
+                $missing++;
+
+                continue;
+            }
+
+            $months[$key][$invoice->direction === InvoiceDirection::Sales ? 'sales' : 'purchases'] += $pln;
+        }
+
+        return [
+            'months' => array_values($months),
+            'missing' => $missing,
+            'sales' => array_sum(array_column($months, 'sales')),
+            'purchases' => array_sum(array_column($months, 'purchases')),
+        ];
     }
 
     /**
@@ -200,38 +248,55 @@ new #[Title('Dashboard')] class extends Component {
         </flux:callout>
     @endif
 
+    {{-- Kafelki: kolor ikony mówi, czego dotyczą (czas, tygodnie, należności, dokumenty) --}}
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <flux:card>
-            <flux:text>{{ __('My hours this week') }}</flux:text>
-            <flux:heading size="xl">{{ $hours($this->myHours['week']) }} h</flux:heading>
-            <flux:text size="sm">{{ __('This month: :hours h', ['hours' => $hours($this->myHours['month'])]) }}</flux:text>
+        <flux:card class="flex items-start gap-4">
+            <div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300"><flux:icon.clock /></div>
+            <div>
+                <flux:text>{{ __('My hours this week') }}</flux:text>
+                <flux:heading size="xl">{{ $hours($this->myHours['week']) }} h</flux:heading>
+                <flux:text size="sm">{{ __('This month: :hours h', ['hours' => $hours($this->myHours['month'])]) }}</flux:text>
+            </div>
         </flux:card>
 
-        <flux:card>
-            <flux:text>{{ __('Weeks to close') }}</flux:text>
-            <flux:heading size="xl">{{ $this->openWeeks->count() }}</flux:heading>
-            <flux:link :href="route('weeks.index')" wire:navigate class="text-sm">{{ __('Weeks') }}</flux:link>
+        <flux:card class="flex items-start gap-4">
+            <div @class(['flex size-11 shrink-0 items-center justify-center rounded-xl', 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' => $this->openWeeks > 0, 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' => $this->openWeeks === 0])><flux:icon.calendar-days /></div>
+            <div>
+                <flux:text>{{ __('Weeks to close') }}</flux:text>
+                <flux:heading size="xl">{{ $this->openWeeks }}</flux:heading>
+                <flux:link :href="route('weeks.index')" wire:navigate class="text-sm">{{ __('Weeks') }}</flux:link>
+            </div>
         </flux:card>
 
         @can('manage-invoices')
-            <flux:card>
-                <flux:text>{{ __('Unpaid invoices') }}</flux:text>
-                <flux:heading size="xl">{{ $this->receivables['count'] }}</flux:heading>
-                <flux:text size="sm" @class(['text-red-600 dark:text-red-400' => $this->receivables['overdue'] > 0])>
-                    {{ __('Overdue: :count', ['count' => $this->receivables['overdue']]) }}
-                </flux:text>
-                @foreach ($this->receivables['sums'] as $currency => $sum)
-                    <flux:text size="sm">{{ $money($sum, $currency) }}</flux:text>
-                @endforeach
+            <flux:card class="flex items-start gap-4">
+                <div @class(['flex size-11 shrink-0 items-center justify-center rounded-xl', 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300' => $this->receivables['overdue'] > 0, 'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300' => $this->receivables['overdue'] === 0])><flux:icon.banknotes /></div>
+                <div>
+                    <flux:text>{{ __('Unpaid invoices') }}</flux:text>
+                    <flux:heading size="xl">{{ $this->receivables['count'] }}</flux:heading>
+                    <flux:text size="sm" @class(['text-red-600 dark:text-red-400' => $this->receivables['overdue'] > 0])>
+                        {{ __('Overdue: :count', ['count' => $this->receivables['overdue']]) }}
+                    </flux:text>
+                    @foreach ($this->receivables['sums'] as $currency => $sum)
+                        <flux:text size="sm">{{ $money($sum, $currency) }}</flux:text>
+                    @endforeach
+                </div>
             </flux:card>
 
-            <flux:card>
-                <flux:text>{{ __('Drafts / waiting for KSeF') }}</flux:text>
-                <flux:heading size="xl">{{ $this->receivables['drafts'] }} / {{ $this->receivables['pending'] }}</flux:heading>
-                <flux:link :href="route('invoices.index', ['status' => 'draft'])" wire:navigate class="text-sm">{{ __('Sales invoices') }}</flux:link>
+            <flux:card class="flex items-start gap-4">
+                <div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300"><flux:icon.document-text /></div>
+                <div>
+                    <flux:text>{{ __('Drafts / waiting for KSeF') }}</flux:text>
+                    <flux:heading size="xl">{{ $this->receivables['drafts'] }} / {{ $this->receivables['pending'] }}</flux:heading>
+                    <flux:link :href="route('invoices.index', ['status' => 'draft'])" wire:navigate class="text-sm">{{ __('Sales invoices') }}</flux:link>
+                </div>
             </flux:card>
         @endcan
     </div>
+
+    @can('manage-invoices')
+        @include('partials.dashboard-sales-chart', ['data' => $this->monthly])
+    @endcan
 
     <div class="grid gap-6 lg:grid-cols-2">
         @if ($this->toSettle !== [])
@@ -250,15 +315,6 @@ new #[Title('Dashboard')] class extends Component {
                             @endunless
                         </div>
                     </div>
-                @endforeach
-            </flux:card>
-        @endif
-
-        @if ($this->openWeeks->isNotEmpty())
-            <flux:card class="space-y-2">
-                <flux:heading size="lg">{{ __('Weeks to close') }}</flux:heading>
-                @foreach ($this->openWeeks as $week)
-                    <flux:link class="block" :href="route('weeks.show', $week)" wire:navigate>{{ $week->label() }}</flux:link>
                 @endforeach
             </flux:card>
         @endif
