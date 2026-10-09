@@ -8,8 +8,8 @@
     @if ($logo)
         <div style="float: right; width: 45%; text-align: right;"><img src="{{ $logo }}" style="height: 14mm;" alt=""></div>
     @endif
-    <div style="font-size: 18pt; font-weight: bold;">{{ $company->name }}</div>
-    <div style="font-size: 12pt;">
+    <div style="font-size: 12.6pt; font-weight: bold;">{{ $company->name }}</div>
+    <div style="font-size: 9pt; line-height: 1.4;">
         {{ trim($company->street.', '.$company->zip.' '.$company->city, ', ') }}<br>
         @if ($company->email) mail: {{ $company->email }}<br> @endif
         @if ($company->website) web: {{ $company->website }}<br> @endif
@@ -18,13 +18,13 @@
     <div style="clear: both;"></div>
 </div>
 
-{{-- Tytuł między liniami, numer po prawej — jak w dotychczasowym wzorze. --}}
-<table width="100%" style="border-collapse: collapse; margin-top: 4mm;">
-    <tr><td style="border-top: 0.3mm solid #000; padding-top: 2mm; text-align: center; font-size: 24pt; font-weight: bold;">Protokół z pomiarów elektrycznych</td></tr>
-    <tr><td style="border-bottom: 0.3mm solid #000; padding-bottom: 1mm; text-align: right; font-size: 10.5pt;">Numer: <b>{{ $protocol->number }}</b></td></tr>
+{{-- Tytuł i numer po prawej, linia pod numerem — rozmiary jak w dotychczasowym wzorze (18 pt / 8,2 pt). --}}
+<table width="100%" style="border-collapse: collapse; margin-top: 8mm;">
+    <tr><td style="text-align: center; font-size: 18pt; font-weight: bold;">Protokół z pomiarów elektrycznych</td></tr>
+    <tr><td style="border-bottom: 0.3mm solid #000; padding-bottom: 1mm; text-align: right; font-size: 8.2pt;">Numer: <b>{{ $protocol->number }}</b></td></tr>
 </table>
 
-<table class="meta title-meta" width="100%" style="margin-top: 4mm;">
+<table class="meta title-meta" width="100%" style="margin-top: 6mm;">
     <tr><td class="label">Wykonawca:</td><td class="value">{{ $company->name }}</td></tr>
     <tr><td class="label">Miejsce pomiaru:</td><td class="value">{{ $protocol->place }}</td></tr>
     @if ($protocol->investor)
@@ -62,7 +62,7 @@
     @endif
 </table>
 
-<table width="100%" style="margin-top: 14mm;">
+<table width="100%" style="margin-top: 14mm; font-size: 9pt;">
     <tr>
         <td>@if ($protocol->next_test_on) Uwaga: Termin następnych badań – <b>{{ PolishDate::monthYear($protocol->next_test_on) }}</b> @endif</td>
         <td style="text-align: right;">{{ $company->issue_place ?: $company->city }}, dnia {{ PolishDate::long($protocol->measured_on) }}</td>
