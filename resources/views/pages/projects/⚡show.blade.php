@@ -8,6 +8,7 @@ use App\Models\Invoice;
 use App\Models\MaterialEntry;
 use App\Models\Project;
 use App\Models\TimeEntry;
+use App\Support\MeasurementInput;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Support\Collection;
@@ -77,7 +78,8 @@ new class extends Component {
             ->map(fn (Collection $group) => (object) [
                 'name' => $group->first()->name,
                 'unit' => $group->first()->unit,
-                'quantity' => rtrim(rtrim((string) $group->reduce(fn (BigDecimal $sum, MaterialEntry $material) => $sum->plus($material->quantity), BigDecimal::zero()), '0'), '.'),
+                // Pozycje bez ilości (albo nieczytelne) nie psują sumy — liczą się jako 0.
+                'quantity' => rtrim(rtrim((string) $group->reduce(fn (BigDecimal $sum, MaterialEntry $material) => $sum->plus(MeasurementInput::decimal($material->quantity) ?? '0'), BigDecimal::zero()), '0'), '.'),
             ])
             ->sortBy('name')
             ->values();
