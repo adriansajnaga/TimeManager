@@ -403,8 +403,10 @@ final class LegacyImporter
                 $this->report->add('weeks', 'closed');
             }
 
-            if ((int) $row->INVOICED === 1 && ! $week->isInvoiced()) {
-                $week->forceFill(['invoiced_at' => $stamp])->save();
+            // „Zafakturowane” w starej aplikacji dotyczy zaimportowanych godzin, nie całej części tygodnia —
+            // godziny dopisane później w nowej aplikacji trafiają do rozliczenia.
+            if ((int) $row->INVOICED === 1) {
+                $week->timeEntries()->whereNotNull('legacy_id')->update(['legacy_invoiced' => true]);
                 $this->report->add('weeks', 'invoiced');
             }
         }

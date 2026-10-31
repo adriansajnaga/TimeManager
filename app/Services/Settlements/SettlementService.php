@@ -45,7 +45,8 @@ final class SettlementService
         return WorkWeek::query()
             ->closedFor($contractor)
             ->whereNull('invoiced_at')
-            ->whereHas('timeEntries', fn (Builder $entries) => $entries->whereHas('project', fn (Builder $projects) => $this->hourlyProjectsOf($projects, $contractor)))
+            // Godziny do rozliczenia: bez tych zafakturowanych jeszcze w starej aplikacji (dopisane później — tak).
+            ->whereHas('timeEntries', fn (Builder $entries) => $entries->billable()->whereHas('project', fn (Builder $projects) => $this->hourlyProjectsOf($projects, $contractor)))
             ->whereDoesntHave('settlements', fn (Builder $settlements) => $settlements->where('contractor_id', $contractor->id))
             ->orderBy('starts_on')
             ->get();
@@ -58,6 +59,7 @@ final class SettlementService
     {
         $entries = TimeEntry::query()
             ->with('project')
+            ->billable()
             ->whereIn('work_week_id', $weeks->pluck('id'))
             ->whereHas('project', fn (Builder $projects) => $this->hourlyProjectsOf($projects, $contractor))
             ->get();

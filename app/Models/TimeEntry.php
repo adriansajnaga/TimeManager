@@ -8,6 +8,7 @@ use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Database\Factories\TimeEntryFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -30,6 +31,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $description
  * @property bool $count_mileage
  * @property int|null $legacy_id
+ * @property bool $legacy_invoiced Zafakturowane w starej aplikacji (zaimportowane godziny) — nie idą do rozliczenia
  */
 #[Fillable([
     'user_id', 'project_id', 'work_date', 'start_time', 'end_time', 'break_minutes',
@@ -55,7 +57,18 @@ class TimeEntry extends Model
             'hours' => 'decimal:2',
             'work_type' => WorkType::class,
             'count_mileage' => 'boolean',
+            'legacy_invoiced' => 'boolean',
         ];
+    }
+
+    /**
+     * Godziny do rozliczenia — bez zafakturowanych jeszcze w starej aplikacji.
+     *
+     * @param  Builder<TimeEntry>  $query
+     */
+    public function scopeBillable(Builder $query): void
+    {
+        $query->where('time_entries.legacy_invoiced', false);
     }
 
     protected static function booted(): void

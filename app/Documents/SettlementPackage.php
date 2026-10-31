@@ -122,6 +122,7 @@ final class SettlementPackage
     {
         $ids = TimeEntry::query()
             ->whereIn('work_week_id', $weeks->pluck('id'))
+            ->billable()
             ->whereHas('project', fn ($projects) => $projects->where('contractor_id', $settlement->contractor_id))
             ->when($mileageOnly, fn ($query) => $query->where('count_mileage', true))
             ->distinct()

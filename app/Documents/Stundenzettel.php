@@ -59,6 +59,7 @@ final class Stundenzettel extends WorkDocument
         $entries = TimeEntry::query()
             ->with('user')
             ->whereIn('work_week_id', $this->weeks->pluck('id'))
+            ->billable()
             ->whereHas('project', fn ($query) => $query->where('contractor_id', $this->client->id))
             ->get()
             ->groupBy('work_week_id');

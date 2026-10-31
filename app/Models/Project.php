@@ -72,8 +72,8 @@ class Project extends Model
     }
 
     /**
-     * Dodaje kolumnę is_unsettled: godzinowy — godziny w części tygodnia bez rozliczenia tego klienta
-     * (i niezafakturowanej w starej aplikacji); ryczałtowy — aktywny bez wystawionej faktury rozliczeniowej.
+     * Dodaje kolumnę is_unsettled: godzinowy — godziny (poza zafakturowanymi w starej aplikacji) w części tygodnia
+     * bez rozliczenia tego klienta; ryczałtowy — aktywny bez wystawionej faktury rozliczeniowej.
      *
      * @param  Builder<Project>  $query
      */
@@ -84,6 +84,7 @@ class Project extends Model
                 SELECT 1 FROM time_entries te
                 JOIN work_weeks ww ON ww.id = te.work_week_id
                 WHERE te.project_id = projects.id
+                  AND te.legacy_invoiced = 0
                   AND ww.invoiced_at IS NULL
                   AND NOT EXISTS (
                       SELECT 1 FROM settlement_work_week sww

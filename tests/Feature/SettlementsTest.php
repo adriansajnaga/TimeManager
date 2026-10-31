@@ -6,6 +6,7 @@ use App\Documents\Montageauftrag;
 use App\Documents\SettlementPackage;
 use App\Documents\Stundenzettel;
 use App\Enums\InvoiceLineMode;
+use App\Enums\ProjectBillingType;
 use App\Enums\VatCode;
 use App\Models\Contractor;
 use App\Models\MileageDay;
@@ -208,4 +209,29 @@ test('the package file is named after the invoice number', function () {
         ->get(route('invoices.package', $invoice))
         ->assertOk()
         ->assertHeader('Content-Disposition', "inline; filename=\"2026_8_4 ASCOMM-zusammengefugt.pdf\"; filename*=utf-8''2026_8_4%20ASCOMM-zusammengef%C3%BCgt.pdf");
+});
+
+test('hours added now to an old week invoiced in the previous application are settled, the old hours are not', function () {
+    $admin = User::factory()->admin()->create();
+    $gaertner = Contractor::factory()->create(['hourly_rate' => '50.00']);
+    $other = Contractor::factory()->create(['hourly_rate' => '40.00']);
+    $gaertnerProject = Project::factory()->for($gaertner)->create(['billing_type' => ProjectBillingType::Hourly]);
+    $otherProject = Project::factory()->for($other)->create(['billing_type' => ProjectBillingType::Hourly]);
+    $hours = ['start_time' => '06:00', 'end_time' => '14:00', 'break_minutes' => 0];
+
+    // Godziny ze starej aplikacji (zafakturowane tam) i dopisane teraz — w tym samym starym tygodniu.
+    $legacy = TimeEntry::factory()->for($admin)->for($gaertnerProject)->create(['work_date' => '2025-06-02', ...$hours]);
+    $legacy->forceFill(['legacy_id' => 501, 'legacy_invoiced' => true])->save();
+    TimeEntry::factory()->for($admin)->for($gaertnerProject)->create(['work_date' => '2025-06-03', ...$hours]);
+    TimeEntry::factory()->for($admin)->for($otherProject)->create(['work_date' => '2025-06-04', ...$hours]);
+    $week = $legacy->workWeek;
+    $week->close($admin);
+
+    $service = app(SettlementService::class);
+
+    foreach ([$gaertner, $other] as $client) {
+        expect($service->billableWeeks($client)->pluck('id')->all())->toBe([$week->id])
+            // Tylko godziny dopisane teraz (8 h), bez zafakturowanych w starej aplikacji.
+            ->and((string) $service->preview($client, $service->billableWeeks($client))->hours)->toBe('8.00');
+    }
 });
