@@ -158,13 +158,15 @@ test('import brings users, contractors, projects, hours and closed weeks', funct
         ->and($entries[1]->work_type)->toBe(WorkType::Demontage)
         ->and($entries[1]->hours)->toBe('8.00');
 
-    // Tydzień 40 na przełomie miesięcy: obie części zamknięte, wrzesień zafakturowany, październik nie.
+    // Tydzień 40 na przełomie miesięcy: obie części zamknięte; „zafakturowane” we wrześniu dotyczy
+    // zaimportowanych godzin, nie całego tygodnia (godziny dopisane później można rozliczyć).
     $september = WorkWeek::query()->where('iso_week', 40)->where('month', 9)->sole();
     $october = WorkWeek::query()->where('iso_week', 40)->where('month', 10)->sole();
     expect($september->isClosed())->toBeTrue()
-        ->and($september->isInvoiced())->toBeTrue()
+        ->and($september->isInvoiced())->toBeFalse()
+        ->and($september->timeEntries()->where('legacy_invoiced', false)->exists())->toBeFalse()
         ->and($october->isClosed())->toBeTrue()
-        ->and($october->isInvoiced())->toBeFalse();
+        ->and($october->timeEntries()->where('legacy_invoiced', true)->exists())->toBeFalse();
 
     // KW 41 nie miała timesheetu — zostaje otwarta.
     expect(WorkWeek::query()->where('iso_week', 41)->sole()->isClosed())->toBeFalse();
