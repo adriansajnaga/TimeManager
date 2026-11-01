@@ -281,6 +281,24 @@ test('the NBP rate comes from the last business day before the date and is store
     Http::assertSentCount(1);
 });
 
+test('the NBP rate button takes the rate from the day before the click, not before the work dates', function () {
+    $this->travelTo(CarbonImmutable::parse('2026-08-01 10:00'));
+    ExchangeRate::query()->create(['currency' => 'EUR', 'effective_date' => '2026-07-31', 'rate' => '4.2563', 'table_number' => '146/A/NBP/2026']);
+    Http::fake();
+    $client = Contractor::factory()->german()->create();
+
+    Livewire::actingAs($this->admin)
+        ->test('pages::invoices.form')
+        ->set('form.contractor_id', (string) $client->id)
+        ->set('form.sale_date', '2026-06-15')
+        ->call('fetchExchangeRate')
+        ->assertHasNoErrors()
+        ->assertSet('form.exchange_rate', '4.2563')
+        ->assertSet('form.exchange_rate_date', '2026-07-31');
+
+    Http::assertNothingSent();
+});
+
 test('NBP errors are shown on the form', function () {
     Http::fake(['api.nbp.pl/*' => Http::response('Not Found', 404)]);
     $client = Contractor::factory()->german()->create();

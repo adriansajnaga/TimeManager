@@ -178,7 +178,7 @@ final class InvoiceIssuer
         }
 
         try {
-            $rate = $this->rates->before($invoice->currency, $invoice->sale_date ?? $invoice->issue_date);
+            $rate = $this->rates->before($invoice->currency, $invoice->issue_date);
         } catch (InvoiceException) {
             return;
         }

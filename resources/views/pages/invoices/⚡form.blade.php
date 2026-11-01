@@ -93,10 +93,9 @@ new class extends Component {
     {
         $this->resetErrorBag('form.exchange_rate');
 
-        $date = $this->form->sale_date ?: $this->form->issue_date;
-
+        // Kurs z ostatniego dnia roboczego przed dniem pobrania (dziś), nie przed datą wykonania prac.
         try {
-            $rate = $rates->before($this->form->currency, CarbonImmutable::parse($date));
+            $rate = $rates->before($this->form->currency, CarbonImmutable::today());
         } catch (InvoiceException $exception) {
             $this->addError('form.exchange_rate', $exception->getMessage());
 
